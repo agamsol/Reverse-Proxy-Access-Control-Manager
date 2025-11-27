@@ -1,10 +1,12 @@
 import os
 import time
+import uvicorn
 from pymongo import MongoClient
 from dotenv import load_dotenv
-from fastapi import FastAPI, Depends, Header, status, HTTPException, Request, Query, Path
+from fastapi import FastAPI, status, HTTPException, Request  # NOQA: F401
 from typing import Optional, Annotated
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, IPvAnyAddress, BeforeValidator
+from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
 
 load_dotenv()
 
@@ -20,6 +22,8 @@ mongo_client = MongoClient(
 )
 
 monogo_database = mongo_client["Reverse-Proxy-Access-Control"]
+pending_connections_collection = monogo_database["pending_connections"]
+services_collection = monogo_database["services"]
 
 # # Collections to be used (add, remove, get, list)
 # users
@@ -32,13 +36,55 @@ app = FastAPI(
     title="Reverse-Proxy-Access-Control-Manager",
 )
 
+app.add_middleware(ProxyHeadersMiddleware, trusted_hosts=["*"])
+
+PyObjectId = Annotated[str, BeforeValidator(str)]
+
+
+class ServiceItem(BaseModel):
+    name: str = Field(..., description="Name of the service to request access to")
+    expiry: int = Field(..., description="Amount of time (in seconds) the access is requested for")
+
 
 class AccessRequest(BaseModel):
-    service_name: str | None = Field(None, description="Name of the service to access")
-    reason: str | None = Field(None, description="Reason for access request")
-    lat: float | None = None
-    lon: float | None = None
-    expiry_timestamp: Optional[int] = None
+    services: list[ServiceItem] | None = Field(None, description="List of all of the service that will be requested")
+    note: str | None = Field(None, max_length=200, description="Note for the access request")
+    lat: float | None = Field(None, ge=-90, le=90, description="Latitude of the requester")
+    lon: float | None = Field(None, ge=-180, le=180, description="Longitude of the requester")
+
+
+class PendingConnectionDatabaseModel(BaseModel):
+    id: Optional[PyObjectId] = Field(alias="_id", default=None)
+    ip_address: IPvAnyAddress
+    service: ServiceItem | None = None
+    notes: str | None = Field(None, max_length=200, description="Note for the access request")
+    lat: float | None = Field(None, ge=-90, le=90)
+    lon: float | None = Field(None, ge=-180, le=180)
+    expire: int | None = None
+
+
+class RequestAccessResponseModel(BaseModel):
+    ip_address: IPvAnyAddress
+    services_requested: list[ServiceItem]
+    message: str = Field(..., max_length=200)
+
+
+class ServiceResponseModel(BaseModel):
+    name: str
+    description: str | None = None
+    internal_address: IPvAnyAddress
+    port: int
+    protocol: str
+
+
+class ServiceModel(ServiceResponseModel):
+    id: Optional[PyObjectId] = Field(alias="_id", default=None)
+
+
+class StatusResponseModel(BaseModel):
+    version: str = Field("1.0", max_length=10)
+    filesystem: str = Field(..., max_length=10)
+    maintenance: bool
 
 
 @app.middleware("http")
@@ -54,20 +100,92 @@ async def add_process_time_header(request: Request, call_next):
     return response
 
 
-@app.get("/status", tags=['Health'], summary="Get service status")
+@app.get(
+    "/status",
+    tags=['Health'],
+    summary="Get service status",
+    response_model=StatusResponseModel
+)
 async def service_status():
 
+    status_reponse = StatusResponseModel(
+        version=SERVICE_VERSION,
+        filesystem=os.name,
+        maintenance=SERVICE_UNDER_MAINTENANCE
+    )
+
+    return status_reponse.model_dump(mode="json")
+
+
+@app.post(
+    "/request-access",
+    tags=['Regular'],
+    summary="Request access to a service",
+    response_model=RequestAccessResponseModel,
+    status_code=status.HTTP_201_CREATED
+)
+async def request_access_landing(access_request: AccessRequest, request: Request):
+
+    services_allowed_to_request = []
+    remote_address = request.client.host
+    user_requested_services = access_request.services
+
+    if user_requested_services is not None:
+
+        for service in user_requested_services:
+
+            if service.name in services_collection.distinct("name"):
+
+                # Search for existing requests from this IP for this service
+
+                # I only need to do this when the request is accepted
+                # existing_request = pending_connections_collection.find_one(
+                #     {"ip_address": remote_address, "service": service.name}
+                # )
+
+                services_allowed_to_request.append(service)
+
+                database_object = PendingConnectionDatabaseModel(
+                    ip_address=remote_address,
+                    service=service,
+                    notes=access_request.note,
+                    lat=access_request.lat,
+                    lon=access_request.lon,
+                    expire=1
+                )
+
+                save_document = database_object.model_dump(mode="json", exclude={"id"})
+                pending_connections_collection.insert_one(save_document)
+
+    if len(services_allowed_to_request) == 0:
+
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No valid services were requested."
+        )
+
     return {
-        "version": "1.0",
-        "filesystem": os.name,
-        "maintenance": SERVICE_UNDER_MAINTENANCE
+        "ip_address": remote_address,
+        "services_requested": services_allowed_to_request,
+        "message": "Your request has been received and is pending approval."
     }
 
 
-@app.post("/", tags=['Regular User'], summary="Request access to a service")
-async def request_access_landing():
-    return {"message": "pong"}
-
-@app.get("/services", tags=['Regular User'], summary="Return all available services")
+@app.get(
+    "/services",
+    tags=['Regular'],
+    summary="Get a list of all available services",
+    status_code=status.HTTP_200_OK,
+    response_model=list[ServiceResponseModel]
+)
 async def list_services():
-    return {"services": ["service1", "service2", "service3"]}
+
+    cursor = services_collection.find()
+    available_services = cursor.to_list(length=None)
+
+    return available_services
+
+
+if __name__ == "__main__":
+
+    uvicorn.run(app, host="0.0.0.0", port=8000)
