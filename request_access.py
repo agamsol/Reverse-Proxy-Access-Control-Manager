@@ -3,9 +3,10 @@ import time
 import uvicorn
 from pymongo import MongoClient
 from dotenv import load_dotenv
+from utils.core_functions import validate_and_convert_objectid
 from fastapi import FastAPI, status, HTTPException, Request  # NOQA: F401
 from typing import Optional, Annotated
-from pydantic import BaseModel, Field, IPvAnyAddress, BeforeValidator
+from pydantic import BaseModel, Field, IPvAnyAddress, BeforeValidator, AfterValidator  # NOQA: F401
 from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
 
 load_dotenv()
@@ -25,20 +26,12 @@ monogo_database = mongo_client["Reverse-Proxy-Access-Control"]
 pending_connections_collection = monogo_database["pending_connections"]
 services_collection = monogo_database["services"]
 
-# # Collections to be used (add, remove, get, list)
-# users
-# services
-# pending_connections
-# allowed_connections
-# denied_connections
-
 app = FastAPI(
-    title="Reverse-Proxy-Access-Control-Manager",
+    title="Reverse-Proxy-Access-Control-Guests",
 )
 
 app.add_middleware(ProxyHeadersMiddleware, trusted_hosts=["*"])
-
-PyObjectId = Annotated[str, BeforeValidator(str)]
+MongoID = Annotated[str, AfterValidator(validate_and_convert_objectid)]
 
 
 class ServiceItem(BaseModel):
@@ -54,13 +47,12 @@ class AccessRequest(BaseModel):
 
 
 class PendingConnectionDatabaseModel(BaseModel):
-    id: Optional[PyObjectId] = Field(alias="_id", default=None)
+    id: Optional[MongoID] = Field(alias="_id", default=None)
     ip_address: IPvAnyAddress
     service: ServiceItem | None = None
     notes: str | None = Field(None, max_length=200, description="Note for the access request")
     lat: float | None = Field(None, ge=-90, le=90)
     lon: float | None = Field(None, ge=-180, le=180)
-    expire: int | None = None
 
 
 class RequestAccessResponseModel(BaseModel):
@@ -78,7 +70,7 @@ class ServiceResponseModel(BaseModel):
 
 
 class ServiceModel(ServiceResponseModel):
-    id: Optional[PyObjectId] = Field(alias="_id", default=None)
+    id: Optional[MongoID] = Field(alias="_id", default=None)
 
 
 class StatusResponseModel(BaseModel):
@@ -114,7 +106,7 @@ async def service_status():
         maintenance=SERVICE_UNDER_MAINTENANCE
     )
 
-    return status_reponse.model_dump(mode="json")
+    return status_reponse
 
 
 @app.post(
@@ -151,7 +143,6 @@ async def request_access_landing(access_request: AccessRequest, request: Request
                     notes=access_request.note,
                     lat=access_request.lat,
                     lon=access_request.lon,
-                    expire=1
                 )
 
                 save_document = database_object.model_dump(mode="json", exclude={"id"})
