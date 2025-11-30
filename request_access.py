@@ -164,7 +164,7 @@ async def request_access_landing(access_request: AccessRequest, request: Request
 
 @app.get(
     "/services",
-    tags=['Regular'],
+    tags=['Services'],
     summary="Get a list of all available services",
     status_code=status.HTTP_200_OK,
     response_model=list[ServiceResponseModel]

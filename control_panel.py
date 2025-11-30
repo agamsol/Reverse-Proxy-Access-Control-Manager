@@ -5,8 +5,8 @@ import uvicorn
 from pymongo import MongoClient
 from dotenv import load_dotenv
 from utils.core_functions import validate_and_convert_objectid
-from fastapi import FastAPI, status, HTTPException, Request, Depends, Form  # NOQA: F401
-from typing import Optional, Annotated  # NOQA: F401
+from fastapi import FastAPI, status, HTTPException, Request, Depends, Form, Path  # NOQA: F401
+from typing import Optional, Annotated, Literal  # NOQA: F401
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm  # NOQA: F401
 from pydantic import BaseModel, Field, IPvAnyAddress, BeforeValidator, AfterValidator  # NOQA: F401
 from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
@@ -83,6 +83,18 @@ def get_login_form(
         password=password,
         remember_me=remember_me
     )
+
+
+class ServiceResponseModel(BaseModel):
+    name: str = Field(..., max_length=200)
+    description: str | None = Field(None, max_length=200)
+    internal_address: IPvAnyAddress = "127.0.0.1"
+    port: int = 80
+    protocol: Literal["http", "https"] = "http"
+
+
+class ServiceModel(ServiceResponseModel):
+    id: Optional[MongoID] = Field(alias="_id", default=None)
 
 
 @app.middleware("http")
@@ -172,15 +184,156 @@ async def read_users_me(token: Annotated[str, Depends(oauth2_token_scheme)]):
 
     return {"payload": pydantic_token_payload, "message": "You are authorized!"}
 
+
+@app.get(
+    "/services",
+    tags=["Service Management"],
+    summary="Get a list of all available services",
+    status_code=status.HTTP_200_OK,
+    response_model=list[ServiceResponseModel]
+)
+async def list_services(token: Annotated[str, Depends(oauth2_token_scheme)]):
+
+    cursor = services_collection.find()
+    available_services = cursor.to_list(length=None)
+
+    return available_services
+
+
+@app.post(
+    "/service/create",
+    tags=["Service Management"],
+    response_model=ServiceResponseModel
+)
+async def service_create(
+    token: Annotated[str, Depends(oauth2_token_scheme)],
+    service: ServiceResponseModel
+):
+
+    service_found = services_collection.find_one(
+        {"name": service.name}
+    )
+
+    service_payload = ServiceResponseModel(
+        name=service.name,
+        description=service.description,
+        internal_address=service.internal_address,
+        port=service.port,
+        protocol=service.protocol
+    )
+
+    if service_found:
+
+        raise HTTPException(
+            status_code=409,
+            detail="This service already exists, please try a different name"
+        )
+
+    services_collection.insert_one(
+        service_payload.model_dump(mode="json")
+    )
+
+    return service_payload
+
+
+class ServiceEditRequestModel(BaseModel):
+    name: str | None = Field(None, max_length=200)
+    description: str | None = Field(None, max_length=200)
+    internal_address: IPvAnyAddress | None = None
+    port: int = None
+    protocol: Literal["http", "https"] = None
+
+    model_config = {
+        "json_schema_extra": {
+            "examples": [
+                {
+                    "name": None,
+                    "description": None,
+                    "internal_address": None,
+                    "port": None,
+                    "protocol": None
+                }
+            ]
+        }
+    }
+
+
+@app.put(
+    "/service/edit/{service_name}",
+    tags=["Service Management"],
+)
+async def service_edit(
+    service: ServiceEditRequestModel,
+    token: Annotated[str, Depends(oauth2_token_scheme)],
+    service_name: str = Path(..., max_length=200),
+):
+
+    service_found: dict = services_collection.find_one(
+        filter={"name": service_name}
+    )
+
+    if not service_found:
+
+        raise HTTPException(
+            status_code=404,
+            detail="The service specified does not exist!"
+        )
+
+    print(f"{service_found=}")
+
+    new_service_payload = ServiceResponseModel(
+        name=service.name if service.name else service_found.get("name"),
+        description=service.description if service.description else service_found.get("description"),
+        internal_address=service.internal_address if service.internal_address else service_found.get("internal_address"),
+        port=service.port if service.port else service_found.get("port"),
+        protocol=service.protocol if service.protocol else service_found.get("protocol")
+    )
+
+    services_collection.update_one(
+        filter={"name": service_name},
+        update={"$set": new_service_payload.model_dump(mode="json")}
+    )
+
+    return new_service_payload
+
+
+@app.delete(
+    "/service/delete/{service_name}",
+    tags=["Service Management"],
+    response_model=dict[str, str]
+)
+async def service_delete(
+    token: Annotated[str, Depends(oauth2_token_scheme)],
+    service_name: str = Path(..., max_length=200)
+):
+
+    service_found = services_collection.find_one(
+        {"name": service_name}
+    )
+
+    if not service_found:
+
+        raise HTTPException(
+            status_code=404,
+            detail=""
+        )
+
+    services_collection.delete_one(
+        {"name": service_name}
+    )
+
+    return {"service": service_name, "message": "The service has been deleted!"}
+
+
 # Tags for API documentation
 # ✅ Health
 # ✅ Authentication
 # - Login for jwt
 # Services Management
-# - Add
-# - Remove
-# - Edit
-# - List
+# - ✅ Add
+# - ✅ Remove
+# - ✅ Edit
+# - ✅ List
 # Pending Connections Management
 # - Allow
 # - Deny (only remove request)
