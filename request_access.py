@@ -1,30 +1,17 @@
 import os
 import time
 import uvicorn
-from pymongo import MongoClient
 from dotenv import load_dotenv
-from utils.core_functions import validate_and_convert_objectid
-from fastapi import FastAPI, status, HTTPException, Request  # NOQA: F401
+from fastapi import FastAPI, status, HTTPException, Request
 from typing import Optional, Annotated
 from pydantic import BaseModel, Field, IPvAnyAddress, BeforeValidator, AfterValidator  # NOQA: F401
 from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
+from dependencies import validate_and_convert_objectid, pending_connections_collection, services_collection
 
-load_dotenv()
+load_dotenv(".env")
 
 SERVICE_VERSION = os.getenv("SERVICE_VERSION")
 SERVICE_UNDER_MAINTENANCE = os.getenv("SERVICE_UNDER_MAINTENANCE") == 'True'
-
-mongo_client = MongoClient(
-    host=os.getenv("MONGODB_HOST"),
-    port=int(os.getenv("MONGODB_PORT")),
-    username=os.getenv("MONGODB_USERNAME"),
-    password=os.getenv("MONGODB_PASSWORD"),
-    ServerSelectionTimeoutMS=10000
-)
-
-monogo_database = mongo_client["Reverse-Proxy-Access-Control"]
-pending_connections_collection = monogo_database["pending_connections"]
-services_collection = monogo_database["services"]
 
 app = FastAPI(
     title="Reverse-Proxy-Access-Control-Guests",
