@@ -1,25 +1,30 @@
-from typing import Literal, Optional
+import os
+from dotenv import load_dotenv
+from typing import Literal, Optional  # NOQA: F401
 from fastapi import APIRouter, status, HTTPException, Request, Depends, Form, Path  # NOQA: F401
 from pydantic import BaseModel, Field, IPvAnyAddress, BeforeValidator, AfterValidator  # NOQA: F401
-from dependencies import MongoID, services_collection
+from common_custom.controllers.mongodb import MongoDb
+from common_custom.controllers.pydantic.service_models import ServiceResponseModel
+
+load_dotenv(".env")
+
+
+mongodb_helper = MongoDb(
+    database_name=os.getenv("MONGODB_DATABASE")
+)
+
+mongodb = mongodb_helper.connect(
+    host=os.getenv("MONGODB_HOST"),
+    port=int(os.getenv("MONGODB_PORT")),
+    username=os.getenv("MONGODB_USERNAME"),
+    password=os.getenv("MONGODB_PASSWORD")
+)
 
 router = APIRouter(
     prefix="/service",
     tags=["Service Management"],
     responses={404: {"description": "Not found"}}
 )
-
-
-class ServiceResponseModel(BaseModel):
-    name: str = Field(..., max_length=200)
-    description: str | None = Field(None, max_length=200)
-    internal_address: IPvAnyAddress = "127.0.0.1"
-    port: int = 80
-    protocol: Literal["http", "https"] = "http"
-
-
-class ServiceModel(ServiceResponseModel):
-    id: Optional[MongoID] = Field(alias="_id", default=None)
 
 
 class ServiceEditRequestModel(BaseModel):
@@ -52,8 +57,7 @@ class ServiceEditRequestModel(BaseModel):
 )
 async def list_services():
 
-    cursor = services_collection.find()
-    available_services = cursor.to_list(length=None)
+    available_services = await mongodb_helper.list_all_services()
 
     return available_services
 
@@ -66,17 +70,7 @@ async def service_create(
     service: ServiceResponseModel
 ):
 
-    service_found = services_collection.find_one(
-        {"name": service.name}
-    )
-
-    service_payload = ServiceResponseModel(
-        name=service.name,
-        description=service.description,
-        internal_address=service.internal_address,
-        port=service.port,
-        protocol=service.protocol
-    )
+    service_found = await mongodb_helper.get_service(service_name=service.name)
 
     if service_found:
 
@@ -85,8 +79,12 @@ async def service_create(
             detail="This service already exists, please try a different name"
         )
 
-    services_collection.insert_one(
-        service_payload.model_dump(mode="json")
+    service_payload = await mongodb_helper.create_service(
+        service.name,
+        service.description,
+        service.internal_address,
+        service.port,
+        service.protocol
     )
 
     return service_payload
@@ -101,9 +99,7 @@ async def service_edit(
     service_name: str = Path(..., max_length=200),
 ):
 
-    service_found: dict = services_collection.find_one(
-        filter={"name": service_name}
-    )
+    service_found = await mongodb_helper.get_service(service_name=service_name)
 
     if not service_found:
 
@@ -112,19 +108,13 @@ async def service_edit(
             detail="The service specified does not exist!"
         )
 
-    print(f"{service_found=}")
-
-    new_service_payload = ServiceResponseModel(
-        name=service.name if service.name else service_found.get("name"),
+    new_service_payload = mongodb_helper.modify_service(
+        service_name=service_name,
         description=service.description if service.description else service_found.get("description"),
         internal_address=service.internal_address if service.internal_address else service_found.get("internal_address"),
         port=service.port if service.port else service_found.get("port"),
-        protocol=service.protocol if service.protocol else service_found.get("protocol")
-    )
-
-    services_collection.update_one(
-        filter={"name": service_name},
-        update={"$set": new_service_payload.model_dump(mode="json")}
+        protocol=service.protocol if service.protocol else service_found.get("protocol"),
+        new_service_name=service.name if service.name else service_found.get("name")
     )
 
     return new_service_payload
@@ -138,19 +128,15 @@ async def service_delete(
     service_name: str = Path(..., max_length=200)
 ):
 
-    service_found = services_collection.find_one(
-        {"name": service_name}
-    )
+    service_found = await mongodb_helper.get_service(service_name=service_name)
 
     if not service_found:
 
         raise HTTPException(
             status_code=404,
-            detail=""
+            detail="The service specified does not exist!"
         )
 
-    services_collection.delete_one(
-        {"name": service_name}
-    )
+    await mongodb_helper.delete_service(service_name)
 
     return {"service": service_name, "message": "The service has been deleted!"}

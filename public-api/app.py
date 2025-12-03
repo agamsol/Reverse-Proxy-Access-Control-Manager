@@ -7,6 +7,7 @@ from typing import Optional, Annotated  # NOQA: F401
 from pydantic import BaseModel, Field, IPvAnyAddress, BeforeValidator, AfterValidator  # NOQA: F401
 from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
 from common_custom.controllers.mongodb import MongoDb
+from common_custom.controllers.pydantic.service_models import ServiceItem
 
 
 load_dotenv(".env")
@@ -15,7 +16,7 @@ SERVICE_VERSION = os.getenv("SERVICE_VERSION")
 SERVICE_UNDER_MAINTENANCE = os.getenv("SERVICE_UNDER_MAINTENANCE") == 'True'
 
 mongodb_helper = MongoDb(
-    database_name="Reverse-Proxy-Access-Control"
+    database_name=os.getenv("MONGODB_DATABASE")
 )
 
 mongodb = mongodb_helper.connect(
@@ -32,11 +33,6 @@ app = FastAPI(
 )
 
 app.add_middleware(ProxyHeadersMiddleware, trusted_hosts=["*"])
-
-
-class ServiceItem(BaseModel):
-    name: str = Field(..., description="Name of the service to request access to")
-    expiry: int = Field(..., description="Amount of time (in seconds) the access is requested for")
 
 
 class AccessRequest(BaseModel):
@@ -155,8 +151,7 @@ async def request_access_landing(access_request: AccessRequest, request: Request
 )
 async def list_services():
 
-    cursor = services_collection.find()
-    available_services = cursor.to_list(length=None)
+    available_services = await mongodb_helper.list_all_services()
 
     return available_services
 

@@ -1,11 +1,7 @@
 from pydantic import BaseModel, Field, IPvAnyAddress
 from typing import Optional
 from common_custom.controllers.validators import MongoID
-
-
-class ServiceItem(BaseModel):
-    name: str = Field(..., description="Name of the service to request access to")
-    expiry: int = Field(..., description="Amount of time (in seconds) the access is requested for")
+from common_custom.controllers.pydantic.service_models import ServiceItem
 
 
 class PendingConnectionDatabaseModel(BaseModel):

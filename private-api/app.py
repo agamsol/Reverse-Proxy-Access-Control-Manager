@@ -8,10 +8,10 @@ from typing import Optional, Annotated, Literal  # NOQA: F401
 from fastapi.security import OAuth2PasswordBearer  # NOQA: F401
 from pydantic import BaseModel, Field, IPvAnyAddress, BeforeValidator, AfterValidator  # NOQA: F401
 from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
-from routes import services
+from routes import service
 
 load_dotenv(".env")
-load_dotenv("administrator.env")
+load_dotenv("private-api\\administrator.env")
 
 SERVICE_VERSION = os.getenv("SERVICE_VERSION")
 SERVICE_UNDER_MAINTENANCE = os.getenv("SERVICE_UNDER_MAINTENANCE") == 'True'
@@ -156,7 +156,7 @@ async def read_users_me(token: Annotated[str, Depends(oauth2_token_scheme)]):
 
 
 app.include_router(
-    router=services.router,
+    router=service.router,
     dependencies=[Depends(oauth2_token_scheme)]  # Alternativly: Annotated[str, Depends(oauth2_token_scheme)]
 )
 
