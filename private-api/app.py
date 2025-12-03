@@ -1,5 +1,4 @@
 import os
-import jwt
 import time
 import uvicorn
 from dotenv import load_dotenv
@@ -8,7 +7,8 @@ from typing import Optional, Annotated, Literal  # NOQA: F401
 from fastapi.security import OAuth2PasswordBearer  # NOQA: F401
 from pydantic import BaseModel, Field, IPvAnyAddress, BeforeValidator, AfterValidator  # NOQA: F401
 from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
-from routes import service
+from routes import service, auth
+from models.auth_models import oauth2_token_scheme
 
 load_dotenv(".env")
 load_dotenv("private-api\\administrator.env")
@@ -21,9 +21,6 @@ app = FastAPI(
     title="Reverse-Proxy-Access-Control-Manager",
 )
 
-oauth2_token_scheme = OAuth2PasswordBearer(tokenUrl="/auth/token")
-
-
 app.add_middleware(ProxyHeadersMiddleware, trusted_hosts=["*"])
 
 
@@ -31,40 +28,6 @@ class StatusResponseModel(BaseModel):
     version: str = Field("1.0", max_length=10)
     filesystem: str = Field(..., max_length=10)
     maintenance: bool
-
-
-class LoginRequestModel(BaseModel):
-    username: str | None = Field(None, min_length=3, max_length=20, description="Administrator user username")
-    password: str | None = Field(None, max_length=199, description="Administrator user password")
-    remember_me: bool = Field(False, description="Whether to remember the login for 60 days or 24 hours day")
-
-
-class LoginResponseModel(BaseModel):
-    access_token: str
-    token_type: str = "bearer"
-
-
-class TokenPayloadModel(BaseModel):
-    username: str = Field(None, min_length=3, max_length=20, description="Administrator user username")
-    exp: int = Field(..., ge=1_000_000_000, le=9_999_999_999, description="Expiration time as UNIX timestamp")
-
-
-class AuthenticatedUserResponseModel(BaseModel):
-    payload: TokenPayloadModel
-    message: str = Field(..., max_length=50)
-
-
-def get_login_form(
-    username: str = Form(..., min_length=3, max_length=20, description="Administrator user username"),
-    password: str = Form(..., max_length=199, description="Administrator user password"),
-    remember_me: bool = Form(False, description="Whether to remember the login for 60 days or 24 hours day"),
-) -> LoginRequestModel:
-
-    return LoginRequestModel(
-        username=username,
-        password=password,
-        remember_me=remember_me
-    )
 
 
 @app.middleware("http")
@@ -96,64 +59,9 @@ async def service_status():
 
     return status_reponse.model_dump(mode="json")
 
-
-@app.post(
-    "/auth/token",
-    tags=['Authentication'],
-    summary="Login to obtain token",
-    response_model=LoginResponseModel
+app.include_router(
+    router=auth.router
 )
-async def login(
-    data: Annotated[LoginRequestModel, Depends(get_login_form)]
-):
-
-    if data.username != os.getenv("ADMIN_USERNAME") or data.password != os.getenv("ADMIN_PASSWORD"):
-
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Incorrect username or password",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-
-    # 86400 seconds = 24 hours
-    # 5184000 seconds = 60 days
-    remember_me_timestamp = 86400 if data.remember_me is False else 5184000
-
-    access_token = jwt.encode(
-        payload={
-            "username": data.username,
-            "exp": int(time.time()) + remember_me_timestamp
-        },
-        key=os.getenv("JWT_SECRET_KEY"),
-        algorithm=os.getenv("JWT_ALGORITHM")
-    )
-
-    login_response = LoginResponseModel(
-        access_token=access_token
-    )
-
-    return login_response
-
-
-@app.get(
-    "/auth/me",
-    tags=['Authentication'],
-    summary="Get current authorized user",
-    response_model=AuthenticatedUserResponseModel
-)
-async def read_users_me(token: Annotated[str, Depends(oauth2_token_scheme)]):
-
-    decoded_token = jwt.decode_complete(token, algorithms=[os.getenv("JWT_ALGORITHM")], key=os.getenv("JWT_SECRET_KEY"))
-
-    payload: dict = decoded_token.get("payload")
-
-    pydantic_token_payload = TokenPayloadModel(
-        username=payload.get("username"),
-        exp=payload.get("exp")
-    )
-
-    return {"payload": pydantic_token_payload, "message": "You are authorized!"}
-
 
 app.include_router(
     router=service.router,
