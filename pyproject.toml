@@ -5,9 +5,14 @@ description = "Dynamic IP access control system for Nginx reverse proxies with a
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
+    "common",
     "fastapi[standard]>=0.121.3",
     "pyjwt>=2.10.1",
     "pymongo>=4.15.4",
     "python-dotenv>=1.2.1",
     "uvicorn>=0.38.0",
+    "common_custom"
 ]
+
+[tool.uv.sources]
+common_custom = { path = "./common_custom", editable = true }

@@ -1,13 +1,11 @@
 from typing import Literal, Optional
 from fastapi import APIRouter, status, HTTPException, Request, Depends, Form, Path  # NOQA: F401
 from pydantic import BaseModel, Field, IPvAnyAddress, BeforeValidator, AfterValidator  # NOQA: F401
-
-from dependencies import MongoID, oauth2_token_scheme, services_collection
+from dependencies import MongoID, services_collection
 
 router = APIRouter(
     prefix="/service",
     tags=["Service Management"],
-    dependencies=[Depends(oauth2_token_scheme)],  # Alternativly: Annotated[str, Depends(oauth2_token_scheme)]
     responses={404: {"description": "Not found"}}
 )
 

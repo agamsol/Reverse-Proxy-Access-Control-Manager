@@ -20,7 +20,6 @@ mongo_client = MongoClient(
 )
 
 monogo_database = mongo_client["Reverse-Proxy-Access-Control"]
-pending_connections_collection = monogo_database["pending_connections"]
 users_collection = monogo_database["users"]
 services_collection = monogo_database["services"]
 pending_connections_collection = monogo_database["pending_connections"]
@@ -29,7 +28,6 @@ ignored_connections_collection = monogo_database["ignored_connections"]
 # /END/ -- MONGODB DATABASE --
 
 # -- AUTHENTICATION SCHEME --
-oauth2_token_scheme = OAuth2PasswordBearer(tokenUrl="/auth/token")
 # /END/ -- AUTHENTICATION SCHEME --
 
 # -- FAST API --

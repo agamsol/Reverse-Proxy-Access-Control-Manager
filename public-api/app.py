@@ -3,22 +3,35 @@ import time
 import uvicorn
 from dotenv import load_dotenv
 from fastapi import FastAPI, status, HTTPException, Request
-from typing import Optional, Annotated
+from typing import Optional, Annotated  # NOQA: F401
 from pydantic import BaseModel, Field, IPvAnyAddress, BeforeValidator, AfterValidator  # NOQA: F401
 from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
-from dependencies import validate_and_convert_objectid, pending_connections_collection, services_collection
+from common_custom.controllers.mongodb import MongoDb
+
 
 load_dotenv(".env")
 
 SERVICE_VERSION = os.getenv("SERVICE_VERSION")
 SERVICE_UNDER_MAINTENANCE = os.getenv("SERVICE_UNDER_MAINTENANCE") == 'True'
 
+mongodb_helper = MongoDb(
+    database_name="Reverse-Proxy-Access-Control"
+)
+
+mongodb = mongodb_helper.connect(
+    host=os.getenv("MONGODB_HOST"),
+    port=int(os.getenv("MONGODB_PORT")),
+    username=os.getenv("MONGODB_USERNAME"),
+    password=os.getenv("MONGODB_PASSWORD")
+)
+
+services_collection = mongodb_helper.database["services"]
+
 app = FastAPI(
     title="Reverse-Proxy-Access-Control-Guests",
 )
 
 app.add_middleware(ProxyHeadersMiddleware, trusted_hosts=["*"])
-MongoID = Annotated[str, AfterValidator(validate_and_convert_objectid)]
 
 
 class ServiceItem(BaseModel):
@@ -33,15 +46,6 @@ class AccessRequest(BaseModel):
     lon: float | None = Field(None, ge=-180, le=180, description="Longitude of the requester")
 
 
-class PendingConnectionDatabaseModel(BaseModel):
-    id: Optional[MongoID] = Field(alias="_id", default=None)
-    ip_address: IPvAnyAddress
-    service: ServiceItem | None = None
-    notes: str | None = Field(None, max_length=200, description="Note for the access request")
-    lat: float | None = Field(None, ge=-90, le=90)
-    lon: float | None = Field(None, ge=-180, le=180)
-
-
 class RequestAccessResponseModel(BaseModel):
     ip_address: IPvAnyAddress
     services_requested: list[ServiceItem]
@@ -54,10 +58,6 @@ class ServiceResponseModel(BaseModel):
     internal_address: IPvAnyAddress
     port: int
     protocol: str
-
-
-class ServiceModel(ServiceResponseModel):
-    id: Optional[MongoID] = Field(alias="_id", default=None)
 
 
 class StatusResponseModel(BaseModel):
@@ -124,16 +124,13 @@ async def request_access_landing(access_request: AccessRequest, request: Request
 
                 services_allowed_to_request.append(service)
 
-                database_object = PendingConnectionDatabaseModel(
-                    ip_address=remote_address,
-                    service=service,
-                    notes=access_request.note,
-                    lat=access_request.lat,
-                    lon=access_request.lon,
+                await mongodb_helper.create_pending_connection(
+                    remote_address=remote_address,
+                    service=service.model_dump(),
+                    additional_notes=access_request.note,
+                    request_latitude=access_request.lat,
+                    request_longitude=access_request.lon
                 )
-
-                save_document = database_object.model_dump(mode="json", exclude={"id"})
-                pending_connections_collection.insert_one(save_document)
 
     if len(services_allowed_to_request) == 0:
 

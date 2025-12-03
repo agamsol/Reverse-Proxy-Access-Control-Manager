@@ -8,8 +8,7 @@ from typing import Optional, Annotated, Literal  # NOQA: F401
 from fastapi.security import OAuth2PasswordBearer  # NOQA: F401
 from pydantic import BaseModel, Field, IPvAnyAddress, BeforeValidator, AfterValidator  # NOQA: F401
 from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
-from services import services
-from dependencies import oauth2_token_scheme
+from routes import services
 
 load_dotenv(".env")
 load_dotenv("administrator.env")
@@ -21,6 +20,9 @@ SERVICE_UNDER_MAINTENANCE = os.getenv("SERVICE_UNDER_MAINTENANCE") == 'True'
 app = FastAPI(
     title="Reverse-Proxy-Access-Control-Manager",
 )
+
+oauth2_token_scheme = OAuth2PasswordBearer(tokenUrl="/auth/token")
+
 
 app.add_middleware(ProxyHeadersMiddleware, trusted_hosts=["*"])
 
@@ -153,7 +155,10 @@ async def read_users_me(token: Annotated[str, Depends(oauth2_token_scheme)]):
     return {"payload": pydantic_token_payload, "message": "You are authorized!"}
 
 
-app.include_router(services.router)
+app.include_router(
+    router=services.router,
+    dependencies=[Depends(oauth2_token_scheme)]  # Alternativly: Annotated[str, Depends(oauth2_token_scheme)]
+)
 
 
 # Tags for API documentation

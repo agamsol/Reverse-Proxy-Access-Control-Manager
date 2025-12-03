@@ -1,0 +1,10 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "common_custom"
+version = "0.1.0"
+description = "Shared utilities"
+requires-python = ">=3.13"
+dependencies = []
