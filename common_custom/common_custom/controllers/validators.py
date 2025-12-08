@@ -1,10 +1,13 @@
 from bson import ObjectId
-from typing import Annotated
-from pydantic import AfterValidator
+from typing import Annotated, Any
+from pydantic import BeforeValidator
 from fastapi import HTTPException
 
 
-def validate_document_id(document_id: str):
+def validate_document_id(document_id: Any):
+
+    if isinstance(document_id, ObjectId):
+        return str(document_id)
 
     if not ObjectId.is_valid(document_id):
 
@@ -13,7 +16,7 @@ def validate_document_id(document_id: str):
             detail="Invalid ObjectId format. ID must be a 24-character hex string."
         )
 
-    return document_id
+    return str(document_id)
 
 
-MongoID = Annotated[str, AfterValidator(validate_document_id)]
+MongoID = Annotated[str, BeforeValidator(validate_document_id)]

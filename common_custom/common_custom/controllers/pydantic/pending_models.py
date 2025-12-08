@@ -11,3 +11,7 @@ class PendingConnectionDatabaseModel(BaseModel):
     notes: str | None = Field(None, max_length=200, description="Note for the access request")
     lat: float | None = Field(None, ge=-90, le=90)
     lon: float | None = Field(None, ge=-180, le=180)
+
+
+class DenyConnectionRequestModel(BaseModel):
+    ignore_connection: bool = Field(False, description="Prevent this connection from sending more requests")

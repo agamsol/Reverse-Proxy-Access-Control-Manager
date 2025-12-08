@@ -28,7 +28,7 @@ router = APIRouter(
 
 
 @router.post(
-    "/auth/token",
+    "/token",
     tags=['Authentication'],
     summary="Login to obtain token",
     response_model=LoginResponseModel
@@ -66,7 +66,7 @@ async def login(
 
 
 @router.get(
-    "/auth/me",
+    "/me",
     tags=['Authentication'],
     summary="Get current authorized user",
     response_model=AuthenticatedUserResponseModel

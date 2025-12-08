@@ -7,7 +7,7 @@ from typing import Optional, Annotated, Literal  # NOQA: F401
 from fastapi.security import OAuth2PasswordBearer  # NOQA: F401
 from pydantic import BaseModel, Field, IPvAnyAddress, BeforeValidator, AfterValidator  # NOQA: F401
 from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
-from routes import service, auth
+from routes import service, auth, pending
 from models.auth_models import oauth2_token_scheme
 
 load_dotenv(".env")
@@ -68,6 +68,10 @@ app.include_router(
     dependencies=[Depends(oauth2_token_scheme)]  # Alternativly: Annotated[str, Depends(oauth2_token_scheme)]
 )
 
+app.include_router(
+    router=pending.router,
+    dependencies=[Depends(oauth2_token_scheme)]  # Alternativly: Annotated[str, Depends(oauth2_token_scheme)]
+)
 
 # Tags for API documentation
 # ✅ Health
