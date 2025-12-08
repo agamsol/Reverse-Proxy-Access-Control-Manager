@@ -200,6 +200,8 @@ class MongoDb:
 
     async def deny_pending_connection(self, connection_id: MongoID, ignore_connection=False):
 
+        await self.get_pending_document(connection_id)
+
         deleted_document: dict = self.database[self.pending_collection_name].find_one_and_delete(
             filter={"_id": ObjectId(connection_id)}
         )
