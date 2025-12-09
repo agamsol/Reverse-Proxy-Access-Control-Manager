@@ -2,6 +2,7 @@ from bson import ObjectId
 from typing import Literal
 from fastapi import HTTPException
 from pymongo import MongoClient, database
+from pymongo.collection import Collection
 from datetime import datetime, timedelta, timezone
 from common_custom.controllers.validators import MongoID
 from common_custom.controllers.pydantic.pending_models import PendingConnectionDatabaseModel
@@ -148,16 +149,22 @@ class MongoDb:
 
         return
 
-    async def get_all_pending(self):
+    async def get_all_documents(self, collection: Collection = None):
 
-        cursor = self.database[self.pending_collection_name].find()
+        if collection is None:
+            collection = self.database[self.pending_collection_name]
+
+        cursor = collection.find()
         all_pending = cursor.to_list(length=None)
 
         return all_pending
 
-    async def get_pending_document(self, document_id: str):
+    async def get_document(self, document_id: str, collection: Collection = None):
 
-        pending_connection_document: dict = self.database[self.pending_collection_name].find_one(
+        if collection is None:
+            collection = self.database[self.pending_collection_name]
+
+        pending_connection_document: dict = collection.find_one(
             filter={"_id": ObjectId(document_id)}
         )
 
@@ -175,7 +182,7 @@ class MongoDb:
         pending_collection = self.database[self.pending_collection_name]
         allowed_collection = self.database[self.allowed_collection_name]
 
-        await self.get_pending_document(connection_id)
+        await self.get_document(connection_id)
 
         pending_connection_payload: dict = pending_collection.find_one_and_delete(
             filter={"_id": ObjectId(connection_id)}
@@ -200,7 +207,7 @@ class MongoDb:
 
     async def deny_pending_connection(self, connection_id: MongoID, ignore_connection=False):
 
-        await self.get_pending_document(connection_id)
+        await self.get_document(connection_id)
 
         deleted_document: dict = self.database[self.pending_collection_name].find_one_and_delete(
             filter={"_id": ObjectId(connection_id)}
@@ -221,3 +228,11 @@ class MongoDb:
             )
 
         return denied_connection
+
+    async def revoke_connection(self, connection_id: MongoID):
+
+        deleted_document: dict = self.database[self.allowed_collection_name].find_one_and_delete(
+            filter={"_id": ObjectId(connection_id)}
+        )
+
+        return deleted_document

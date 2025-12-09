@@ -37,7 +37,7 @@ router = APIRouter(
 )
 async def get_pending_connections():
 
-    pending_connections = await mongodb_helper.get_all_pending()
+    pending_connections = await mongodb_helper.get_all_documents()
 
     return pending_connections
 
