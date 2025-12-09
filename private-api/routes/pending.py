@@ -66,15 +66,22 @@ async def deny_connection(
     payload: DenyConnectionRequestModel
 ):
 
-    deny_mongo_payload = await mongodb_helper.deny_pending_connection(
+    await mongodb_helper.get_document(document_id=id)
+
+    denied_connection = await mongodb_helper.deny_pending_connection(
         connection_id=id,
         ignore_connection=payload.ignore_connection
     )
 
+    if payload.ignore_connection:
+
+        await mongodb_helper.ignore_connection(denied_connection)
+
     response_complete = DeniedSuccessResponseModel(
         message="You denied this connection",
-        service_name=deny_mongo_payload.service_name,
-        ignore=deny_mongo_payload.ignore
+        ip_address=denied_connection.ip_address,
+        service_name=denied_connection.service_name,
+        ignore=payload.ignore_connection
     )
 
     return response_complete

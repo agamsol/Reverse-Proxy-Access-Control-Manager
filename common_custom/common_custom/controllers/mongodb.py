@@ -200,14 +200,12 @@ class MongoDb:
         )
 
         allowed_collection.insert_one(
-            allowed_connection_payload.model_dump(mode="json")
+            allowed_connection_payload.model_dump(mode="json", exclude={"id"})
         )
 
         return allowed_connection_payload
 
     async def deny_pending_connection(self, connection_id: MongoID, ignore_connection=False):
-
-        await self.get_document(connection_id)
 
         deleted_document: dict = self.database[self.pending_collection_name].find_one_and_delete(
             filter={"_id": ObjectId(connection_id)}
@@ -216,22 +214,32 @@ class MongoDb:
         service_payload: dict = deleted_document.get("service")
 
         denied_connection = DeniedConnectionModel(
+            id=ObjectId(connection_id),
             ip_address=deleted_document.get("ip_address"),
             service_name=service_payload.get("name"),
-            ignore=ignore_connection
         )
 
-        if ignore_connection:
+        return denied_connection
 
-            self.database[self.ignored_collection_name].insert_one(
-                denied_connection.model_dump(mode="json")
-            )
+    async def ignore_connection(self, denied_connection: DeniedConnectionModel):
+
+        self.database[self.ignored_collection_name].insert_one(
+            denied_connection.model_dump(mode="json")
+        )
 
         return denied_connection
 
     async def revoke_connection(self, connection_id: MongoID):
 
         deleted_document: dict = self.database[self.allowed_collection_name].find_one_and_delete(
+            filter={"_id": ObjectId(connection_id)}
+        )
+
+        return deleted_document
+
+    async def unignore_connection(self, connection_id: MongoID):
+
+        deleted_document: dict = self.database[self.ignored_collection_name].find_one_and_delete(
             filter={"_id": ObjectId(connection_id)}
         )
 

@@ -88,13 +88,13 @@ app.include_router(
 # - ✅ Edit
 # - ✅ List
 # Pending Connections Management
-# - Allow
-# - Deny (only remove request)
-# - Ignore (And Deny)
-# - List
+# - ✅ Allow
+# - ✅ Deny (only remove request)
+# - ✅ Ignore (And Deny)
+# - ✅ List
 # Access Management (Currently Allowed)
-# - Revoke Access
-# - List
+# - ✅ Revoke Access
+# - ✅ List
 # Notifications Webhook Route
 # - Add Request
 

@@ -12,12 +12,13 @@ class AllowedConnectionModel(BaseModel):
 
 
 class DeniedConnectionModel(BaseModel):
+    id: Optional[MongoID] = Field(alias="_id", default=None)
     ip_address: IPvAnyAddress
     service_name: str
-    ignore: bool = Field(description="Whether to ignore (prevent) the IP Address from sending requests")
 
 
 class DeniedSuccessResponseModel(BaseModel):
     message: str = Field(max_length=100)
+    ip_address: IPvAnyAddress
     service_name: str = Field(description="Applies to a specific service of the network")
     ignore: bool = Field(description="Whether the IP Address was ignored")
