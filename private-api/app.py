@@ -2,13 +2,11 @@ import os
 import time
 import uvicorn
 from dotenv import load_dotenv
-from fastapi import FastAPI, status, HTTPException, Request, Depends, Form, Path  # NOQA: F401
-from typing import Optional, Annotated, Literal  # NOQA: F401
-from fastapi.security import OAuth2PasswordBearer  # NOQA: F401
-from pydantic import BaseModel, Field, IPvAnyAddress, BeforeValidator, AfterValidator  # NOQA: F401
+from fastapi import FastAPI, Request, Depends
 from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
-from routes import service, auth, pending, connection
+from routes import service, auth, pending, connection, webhook
 from models.auth_models import oauth2_token_scheme
+from common_custom.utils.pydantic.health_models import StatusResponseModel
 
 load_dotenv(".env")
 load_dotenv("private-api\\administrator.env")
@@ -22,12 +20,6 @@ app = FastAPI(
 )
 
 app.add_middleware(ProxyHeadersMiddleware, trusted_hosts=["*"])
-
-
-class StatusResponseModel(BaseModel):
-    version: str = Field("1.0", max_length=10)
-    filesystem: str = Field(..., max_length=10)
-    maintenance: bool
 
 
 @app.middleware("http")
@@ -78,6 +70,10 @@ app.include_router(
     dependencies=[Depends(oauth2_token_scheme)]  # Alternativly: Annotated[str, Depends(oauth2_token_scheme)]
 )
 
+app.include_router(
+    router=webhook.router,
+    dependencies=[Depends(oauth2_token_scheme)]  # Alternativly: Annotated[str, Depends(oauth2_token_scheme)]
+)
 # Tags for API documentation
 # ✅ Health
 # ✅ Authentication

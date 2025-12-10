@@ -50,8 +50,8 @@ class ServiceEditRequestModel(BaseModel):
 
 
 @router.get(
-    "/all_services",
-    summary="Get a list of all available services",
+    "/get-service-list",
+    summary="Get all of the available services",
     status_code=status.HTTP_200_OK,
     response_model=list[ServiceResponseModel]
 )
@@ -64,6 +64,7 @@ async def list_services():
 
 @router.post(
     "/create",
+    summary="Add the subdomain as a service pointing to a different application as in your nginx configuration",
     response_model=ServiceResponseModel
 )
 async def service_create(
@@ -90,8 +91,9 @@ async def service_create(
     return service_payload
 
 
-@router.put(
+@router.patch(
     "/edit/{service_name}",
+    summary="Edit specific service information",
     response_model=ServiceResponseModel
 )
 async def service_edit(
@@ -122,6 +124,7 @@ async def service_edit(
 
 @router.delete(
     "/delete/{service_name}",
+    summary="Delete a service from the database",
     response_model=dict[str, str]
 )
 async def service_delete(

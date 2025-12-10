@@ -8,6 +8,7 @@ from common_custom.controllers.validators import MongoID
 from common_custom.controllers.pydantic.pending_models import PendingConnectionDatabaseModel
 from common_custom.controllers.pydantic.service_models import ServiceResponseModel
 from common_custom.controllers.pydantic.allowed_models import AllowedConnectionModel, DeniedConnectionModel
+from common_custom.utils.pydantic.webhook_models import HTTPRequest
 
 # # Collections to be used (add, remove, get, list)
 # users
@@ -31,6 +32,7 @@ class MongoDb:
         self.pending_collection_name = "pending_connections"
         self.allowed_collection_name = "allowed_connections"
         self.ignored_collection_name = "ignored_collection"
+        self.webhooks_collection_name = "webhooks"
 
     def connect(
         self,
@@ -244,3 +246,25 @@ class MongoDb:
         )
 
         return deleted_document
+
+    async def get_webhook(self, event: str):
+
+        event_document = self.database[self.webhooks_collection_name].find_one(
+            {"event": event}
+        )
+
+        return event_document
+
+    async def create_webhook_request(self, http_request: HTTPRequest):
+
+        http_request_document = self.database[self.webhooks_collection_name].insert_one(
+            http_request.model_dump(mode="json")
+        )
+
+        return http_request_document
+
+    async def modify_webhook(self):
+        pass
+
+    async def delete_webhook(self):
+        pass

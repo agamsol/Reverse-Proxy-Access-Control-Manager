@@ -31,7 +31,7 @@ router = APIRouter(
 
 
 @router.get(
-    "/show",
+    "/get-connection-list",
     summary="Show a list of all of the allowed IP addresses",
     status_code=status.HTTP_200_OK,
     response_model=list[AllowedConnectionModel]
@@ -59,7 +59,7 @@ async def revoke_connection(id: MongoID):
 
 
 @router.get(
-    "/ignored/show",
+    "/ignored/get-ignored-list",
     summary="Show a list of all of the ignored IP Addresses",
     status_code=status.HTTP_200_OK,
     response_model=list[DeniedConnectionModel]
@@ -71,7 +71,7 @@ async def show_all_ignored_connections():
     return all_ignored_connections
 
 
-@router.delete(
+@router.post(
     "/ignored/remove/{id}",
     summary="Remove an IP address that has peviously been ignored",
     status_code=status.HTTP_200_OK,

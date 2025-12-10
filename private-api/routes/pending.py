@@ -30,8 +30,8 @@ router = APIRouter(
 
 
 @router.get(
-    "/show",
-    summary="Show all of the pending connections",
+    "/get-pending-connections",
+    summary="Show all of the pending connection requests",
     status_code=status.HTTP_200_OK,
     response_model=list[PendingConnectionDatabaseModel]
 )
@@ -57,7 +57,7 @@ async def accept_connection(id: MongoID):
 
 @router.delete(
     "/deny/{id}",
-    summary="Deny or Ignore a pending connection",
+    summary="Deny (optionally ignore) a pending connection (block specific IP Address from sending connection request)",
     status_code=status.HTTP_200_OK,
     response_model=DeniedSuccessResponseModel
 )

@@ -11,7 +11,8 @@ dependencies = [
     "pymongo>=4.15.4",
     "python-dotenv>=1.2.1",
     "uvicorn>=0.38.0",
-    "common_custom"
+    "common_custom",
+    "requests>=2.32.5",
 ]
 
 [tool.uv.sources]

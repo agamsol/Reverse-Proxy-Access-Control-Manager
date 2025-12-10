@@ -3,12 +3,13 @@ import time
 import uvicorn
 from dotenv import load_dotenv
 from fastapi import FastAPI, status, HTTPException, Request
-from typing import Optional, Annotated  # NOQA: F401
+from typing import Optional, Annotated, Literal  # NOQA: F401
 from pydantic import BaseModel, Field, IPvAnyAddress, BeforeValidator, AfterValidator  # NOQA: F401
 from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
 from common_custom.controllers.mongodb import MongoDb
 from common_custom.controllers.pydantic.service_models import ServiceItem
-
+from common_custom.utils.pydantic.health_models import StatusResponseModel
+from common_custom.controllers.pydantic.service_models import ServiceResponseModel
 
 load_dotenv(".env")
 
@@ -46,20 +47,6 @@ class RequestAccessResponseModel(BaseModel):
     ip_address: IPvAnyAddress
     services_requested: list[ServiceItem]
     message: str = Field(..., max_length=200)
-
-
-class ServiceResponseModel(BaseModel):
-    name: str
-    description: str | None = None
-    internal_address: IPvAnyAddress
-    port: int
-    protocol: str
-
-
-class StatusResponseModel(BaseModel):
-    version: str = Field("1.0", max_length=10)
-    filesystem: str = Field(..., max_length=10)
-    maintenance: bool
 
 
 @app.middleware("http")
@@ -127,6 +114,8 @@ async def request_access_landing(access_request: AccessRequest, request: Request
                     request_latitude=access_request.lat,
                     request_longitude=access_request.lon
                 )
+
+                # Trigger event: pending.new (TODO)
 
     if len(services_allowed_to_request) == 0:
 
