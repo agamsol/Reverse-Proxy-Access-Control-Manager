@@ -1,12 +1,15 @@
 import os
 import time
 import uvicorn
+import requests
+import asyncio
 from dotenv import load_dotenv
 from fastapi import FastAPI, status, HTTPException, Request
 from typing import Optional, Annotated, Literal  # NOQA: F401
 from pydantic import BaseModel, Field, IPvAnyAddress, BeforeValidator, AfterValidator  # NOQA: F401
 from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
 from common_custom.controllers.mongodb import MongoDb
+from common_custom.utils.pydantic.webhook_models import HTTPRequest, convert_method_to_function
 from common_custom.controllers.pydantic.service_models import ServiceItem
 from common_custom.utils.pydantic.health_models import StatusResponseModel
 from common_custom.controllers.pydantic.service_models import ServiceResponseModel
@@ -115,7 +118,31 @@ async def request_access_landing(access_request: AccessRequest, request: Request
                     request_longitude=access_request.lon
                 )
 
-                # Trigger event: pending.new (TODO)
+                # Trigger event: pending.new (webhook request TODO)
+
+                webhook_available = await mongodb_helper.get_webhook(event="pending.new")
+
+                if webhook_available:
+
+                    webhook_request = HTTPRequest(
+                        **webhook_available
+                    )
+
+                    invoke_request = convert_method_to_function(webhook_request.method)
+
+                    print("Starting remote webhook invocation...")
+
+                    webhook_response = await asyncio.to_thread(
+                        invoke_request,
+                        url=webhook_request.url,
+                        headers=webhook_request.headers,
+                        params=webhook_request.query_params,
+                        json=webhook_request.body,
+                        cookies=webhook_request.cookies
+                    )  # Available message variables: {{contact}}, {{message}}, {{ip_address}}, {{date}}
+
+                    print(f"Webhook invoked with status code: {webhook_response.status_code}")
+                    print(f"Response content: {webhook_response.text}")
 
     if len(services_allowed_to_request) == 0:
 
