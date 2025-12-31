@@ -1,4 +1,3 @@
-from nt import access
 import os
 import time
 import uvicorn
