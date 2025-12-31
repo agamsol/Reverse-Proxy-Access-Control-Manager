@@ -1,15 +1,13 @@
 import os
 import time
 import uvicorn
-import requests
-import asyncio
 from dotenv import load_dotenv
 from fastapi import FastAPI, status, HTTPException, Request
 from typing import Optional, Annotated, Literal  # NOQA: F401
 from pydantic import BaseModel, Field, IPvAnyAddress, BeforeValidator, AfterValidator  # NOQA: F401
 from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
 from common_custom.controllers.mongodb import MongoDb
-from common_custom.utils.pydantic.webhook_models import HTTPRequest, convert_method_to_function
+from common_custom.utils.pydantic.webhook_models import HTTPRequest, WebhookValidator
 from common_custom.controllers.pydantic.service_models import ServiceItem
 from common_custom.utils.pydantic.health_models import StatusResponseModel
 from common_custom.controllers.pydantic.service_models import ServiceResponseModel
@@ -41,9 +39,9 @@ app.add_middleware(ProxyHeadersMiddleware, trusted_hosts=["*"])
 
 class AccessRequest(BaseModel):
     services: list[ServiceItem] | None = Field(None, description="List of all of the service that will be requested")
-    note: str | None = Field(None, max_length=200, description="Note for the access request")
-    lat: float | None = Field(None, ge=-90, le=90, description="Latitude of the requester")
-    lon: float | None = Field(None, ge=-180, le=180, description="Longitude of the requester")
+    note: str | None = Field(None, max_length=200, examples=[None], description="Note for the access request")
+    lat: float | None = Field(None, ge=-90, le=90, examples=[None], description="Latitude of the requester")
+    lon: float | None = Field(None, ge=-180, le=180, examples=[None], description="Longitude of the requester")
 
 
 class RequestAccessResponseModel(BaseModel):
@@ -128,21 +126,20 @@ async def request_access_landing(access_request: AccessRequest, request: Request
                         **webhook_available
                     )
 
-                    invoke_request = convert_method_to_function(webhook_request.method)
+                    # Available message variables: {{ip_address}}, {{service}}, {{note}}, {{date}}, {{time}} {{time_seconds}}
+                    context = {
+                        "ip_address": remote_address,
+                        "service": service.name,
+                        "note": access_request.note,
+                        "date": time.strftime("%Y-%m-%d", time.gmtime()),
+                        "time": time.strftime("%H:%M", time.gmtime()),
+                        "time_seconds": time.strftime("%H:%M:%S", time.gmtime())
+                    }
 
-                    print("Starting remote webhook invocation...")
+                    response = await WebhookValidator.execute_webhook(webhook_request, context)
 
-                    webhook_response = await asyncio.to_thread(
-                        invoke_request,
-                        url=webhook_request.url,
-                        headers=webhook_request.headers,
-                        params=webhook_request.query_params,
-                        json=webhook_request.body,
-                        cookies=webhook_request.cookies
-                    )  # Available message variables: {{contact}}, {{message}}, {{ip_address}}, {{date}}
-
-                    print(f"Webhook invoked with status code: {webhook_response.status_code}")
-                    print(f"Response content: {webhook_response.text}")
+                    print(f"Webhook invoked with status code: {response.status_code}")
+                    print(f"Response content: {response.text}")
 
     if len(services_allowed_to_request) == 0:
 
