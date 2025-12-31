@@ -9,6 +9,8 @@ from common_custom.controllers.pydantic.pending_models import PendingConnectionD
 from common_custom.controllers.pydantic.service_models import ServiceResponseModel
 from common_custom.controllers.pydantic.allowed_models import AllowedConnectionModel, DeniedConnectionModel
 from common_custom.utils.pydantic.webhook_models import HTTPRequest
+from common_custom.controllers.pydantic.pending_models import ContactMethodsModel
+
 
 # # Collections to be used (add, remove, get, list)
 # users
@@ -70,6 +72,7 @@ class MongoDb:
 
     async def create_pending_connection(
         self,
+        contact_methods: ContactMethodsModel,
         remote_address,
         service,
         additional_notes,
@@ -78,6 +81,7 @@ class MongoDb:
     ) -> PendingConnectionDatabaseModel:
 
         document_payload = PendingConnectionDatabaseModel(
+            contact_methods=contact_methods,
             ip_address=remote_address,
             service=service,
             notes=additional_notes,
@@ -196,6 +200,7 @@ class MongoDb:
         service_expiry = datetime.now(timezone.utc) + timedelta(hours=requested_service.get("expiry")) if requested_service.get("expiry") is not None else None
 
         allowed_connection_payload = AllowedConnectionModel(
+            contact_methods=pending_connection_payload.get("contact_methods"),
             ip_address=pending_connection_payload.get("ip_address"),
             service_name=requested_service.get("name"),
             ExpireAt=service_expiry
@@ -217,6 +222,7 @@ class MongoDb:
 
         denied_connection = DeniedConnectionModel(
             id=ObjectId(connection_id),
+            contact_methods=deleted_document.get("contact_methods"),
             ip_address=deleted_document.get("ip_address"),
             service_name=service_payload.get("name"),
         )

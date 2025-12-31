@@ -2,17 +2,20 @@ from typing import Optional
 from datetime import datetime
 from pydantic import BaseModel, Field, IPvAnyAddress
 from common_custom.controllers.validators import MongoID
+from common_custom.controllers.pydantic.pending_models import ContactMethodsModel
 
 
 class AllowedConnectionModel(BaseModel):
     id: Optional[MongoID] = Field(alias="_id", default=None)
     ip_address: IPvAnyAddress
+    contact_methods: ContactMethodsModel
     service_name: str
     ExpireAt: datetime | None
 
 
 class DeniedConnectionModel(BaseModel):
     id: Optional[MongoID] = Field(alias="_id", default=None)
+    contact_methods: ContactMethodsModel
     ip_address: IPvAnyAddress
     service_name: str
 

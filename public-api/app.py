@@ -1,3 +1,4 @@
+from nt import access
 import os
 import time
 import uvicorn
@@ -11,6 +12,8 @@ from common_custom.utils.pydantic.webhook_models import HTTPRequest, WebhookVali
 from common_custom.controllers.pydantic.service_models import ServiceItem
 from common_custom.utils.pydantic.health_models import StatusResponseModel
 from common_custom.controllers.pydantic.service_models import ServiceResponseModel
+from common_custom.controllers.pydantic.pending_models import ContactMethodsRequestModel, ContactMethodsModel
+
 
 load_dotenv(".env")
 
@@ -39,6 +42,7 @@ app.add_middleware(ProxyHeadersMiddleware, trusted_hosts=["*"])
 
 class AccessRequest(BaseModel):
     services: list[ServiceItem] | None = Field(None, description="List of all of the service that will be requested")
+    contact_methods: ContactMethodsRequestModel
     note: str | None = Field(None, max_length=200, examples=[None], description="Note for the access request")
     lat: float | None = Field(None, ge=-90, le=90, examples=[None], description="Latitude of the requester")
     lon: float | None = Field(None, ge=-180, le=180, examples=[None], description="Longitude of the requester")
@@ -108,7 +112,14 @@ async def request_access_landing(access_request: AccessRequest, request: Request
 
                 services_allowed_to_request.append(service)
 
+                contact_methods_db = ContactMethodsModel(
+                    name=access_request.contact_methods.name,
+                    email={} if not access_request.contact_methods.email else {access_request.contact_methods.email: False},
+                    phone_number={} if not access_request.contact_methods.phone_number else {access_request.contact_methods.phone_number: False}
+                )
+
                 await mongodb_helper.create_pending_connection(
+                    contact_methods=contact_methods_db,
                     remote_address=remote_address,
                     service=service.model_dump(),
                     additional_notes=access_request.note,
