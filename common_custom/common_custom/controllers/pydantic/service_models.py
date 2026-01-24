@@ -17,4 +17,4 @@ class ServiceModel(ServiceResponseModel):
 
 class ServiceItem(BaseModel):
     name: str = Field(..., description="Name of the service to request access to")
-    expiry: int = Field(..., description="Amount of time (in seconds) the access is requested for")
+    expiry: Optional[int] = Field(None, description="Amount of time (in minutes) the access is requested for")

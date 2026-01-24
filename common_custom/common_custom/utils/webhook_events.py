@@ -1,7 +1,11 @@
 import os
+import time
 import requests
+from datetime import datetime
 from dotenv import load_dotenv
 from common_custom.controllers.mongodb import MongoDb
+from common_custom.utils.pydantic.webhook_models import HTTPRequest, WebhookValidator
+from common_custom.controllers.pydantic.allowed_models import AllowedConnectionModel
 
 load_dotenv(".env")
 
@@ -21,30 +25,124 @@ webhooks_collection = mongodb_helper.database[mongodb_helper.webhooks_collection
 
 class Events:
 
-    def __init__(self):
-        self.methods = {
-            "GET": requests.get,
-            "HEAD": requests.head,
-            "POST": requests.post,
-            "PUT": requests.put,
-            "DELETE": requests.delete
-        }
-
-    async def _invoke_request(self):
+    async def _invoke_request():
         pass
 
-    async def pending_new(self):
+    @staticmethod
+    async def pending_new(access_request, remote_address: str, service):
+        
+        webhook_available = await mongodb_helper.get_webhook(event="pending.new")
 
-        # Send patterns to this function (variables used in the request that is invoked)
-        # This is for tomorrow lol good night...
+        if webhook_available:
 
-        pass
+            webhook_request = HTTPRequest(
+                **webhook_available
+            )
 
-    async def pending_accepted(self):
-        pass
+            print(type(access_request.note))
+            print(access_request.note)
 
-    async def pending_denied(self):
-        pass
+            # Available message variables: {{ip_address}}, {{service}}, {{note}}, {{date}}, {{time}} {{time_seconds}}, {{nl}}
+            context = {
+                "ip_address": remote_address,
+                "service": service.name,
+                "note": "" if access_request.note is None else "\nNote: " + str(access_request.note),
+                "date": time.strftime("%Y-%m-%d", time.gmtime()),
+                "time": time.strftime("%H:%M", time.gmtime()),
+                "time_seconds": time.strftime("%H:%M:%S", time.gmtime()),
+                "nl": "\n"
+            }
 
-    async def connection_revoked(self):
-        pass
+            response = await WebhookValidator.execute_webhook(webhook_request, context)
+
+            print(f"Webhook invoked with status code: {response.status_code}")
+            print(f"Response content: {response.text}")
+
+            return response
+
+    @staticmethod
+    async def pending_accepted(allowed_connection_payload: AllowedConnectionModel):
+
+        webhook_available = await mongodb_helper.get_webhook(event="pending.accepted")
+
+        if webhook_available:
+
+            webhook_request = HTTPRequest(
+                **webhook_available
+            )
+
+            # Available message variables: {{phone_number}}, {{service}}, {{expiry_date}}, {{expiry_time}}, {{expiry_time_seconds}}, {{nl}}
+            context = {
+                "phone_number": next(iter(allowed_connection_payload.contact_methods.phone_number)),
+                "service": allowed_connection_payload.service_name,
+                "expiry_date": allowed_connection_payload.ExpireAt.strftime("%Y-%m-%d"),
+                "expiry_time": allowed_connection_payload.ExpireAt.strftime("%H:%M"),
+                "expiry_time_seconds": allowed_connection_payload.ExpireAt.strftime("%H:%M:%S"),
+                "nl": "\n"
+            }
+
+            response = await WebhookValidator.execute_webhook(webhook_request, context)
+
+            print(f"Webhook invoked with status code: {response.status_code}")
+            print(f"Response content: {response.text}")
+
+            return response
+
+    @staticmethod
+    async def pending_denied():
+
+        webhook_available = await mongodb_helper.get_webhook(event="pending.denied")
+
+        if webhook_available:
+
+            webhook_request = HTTPRequest(
+                **webhook_available
+            )
+
+            # Available message variables: {{phone_number}}, {{service}}, {{expiry_date}}, {{expiry_time}}, {{expiry_time_seconds}}, {{nl}}
+            context = {
+                "phone_number": next(iter(allowed_connection_payload.contact_methods.phone_number)),
+                "service": allowed_connection_payload.service_name,
+                "expiry_date": allowed_connection_payload.ExpireAt.strftime("%Y-%m-%d"),
+                "expiry_time": allowed_connection_payload.ExpireAt.strftime("%H:%M"),
+                "expiry_time_seconds": allowed_connection_payload.ExpireAt.strftime("%H:%M:%S"),
+                "nl": "\n"
+            }
+
+            response = await WebhookValidator.execute_webhook(webhook_request, context)
+
+            print(f"Webhook invoked with status code: {response.status_code}")
+            print(f"Response content: {response.text}")
+
+            return response
+
+    @staticmethod
+    async def connection_revoked(document_payload: dict):
+
+        webhook_available = await mongodb_helper.get_webhook(event="connection.revoked")
+
+        if webhook_available:
+
+            webhook_request = HTTPRequest(
+                **webhook_available
+            )
+
+            expiry_date = datetime.fromisoformat(document_payload.get("ExpireAt"))
+
+            # Available message variables: {{phone_number}}, {{service}}, {{expiry_date}}, {{expiry_time}}, {{expiry_time_seconds}}, {{nl}}
+            context = {
+                "email": document_payload.get("contact_methods", {}).get("email", {}),
+                "phone_number": next(iter(document_payload.get("contact_methods", {}).get("phone_number", {}))),
+                "service": document_payload.get("service_name"),
+                "expiry_date": expiry_date.strftime("%Y-%m-%d"),
+                "expiry_time": expiry_date.strftime("%H:%M"),
+                "expiry_time_seconds": expiry_date.strftime("%H:%M:%S"),
+                "nl": "\n"
+            }
+
+            response = await WebhookValidator.execute_webhook(webhook_request, context)
+
+            print(f"Webhook invoked with status code: {response.status_code}")
+            print(f"Response content: {response.text}")
+
+            return response

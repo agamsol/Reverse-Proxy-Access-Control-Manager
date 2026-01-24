@@ -6,7 +6,7 @@ from typing import Any, Dict, Optional, Literal
 
 
 class HTTPRequest(BaseModel):
-    event: Literal["pending.new", "pending.accepted", "pending.denied" "connection.revoked"]
+    event: Literal["pending.new", "pending.accepted", "pending.denied", "connection.revoked"]
     method: Literal["GET", "HEAD", "POST", "PUT", "DELETE"]
     url: str
     headers: Optional[Dict[str, Any]] = None

@@ -1,8 +1,7 @@
 import os
 from dotenv import load_dotenv
-from typing import Literal, Optional  # NOQA: F401
-from fastapi import APIRouter, status, HTTPException, Request, Depends, Form, Path  # NOQA: F401
-from pydantic import BaseModel, Field, IPvAnyAddress, BeforeValidator, AfterValidator  # NOQA: F401
+from fastapi import APIRouter, status
+from common_custom.utils.webhook_events import Events
 from common_custom.controllers.mongodb import MongoDb
 from common_custom.controllers.validators import MongoID
 from common_custom.controllers.pydantic.allowed_models import AllowedConnectionModel, DeniedSuccessResponseModel
@@ -51,6 +50,9 @@ async def get_pending_connections():
 async def accept_connection(id: MongoID):
 
     allowed_connection_payload = await mongodb_helper.accept_pending_connection(connection_id=id)
+    
+    # Trigger event: pending.accepted
+    await Events.pending_accepted(allowed_connection_payload)
 
     return allowed_connection_payload
 
@@ -72,6 +74,9 @@ async def deny_connection(
         connection_id=id,
         ignore_connection=payload.ignore_connection
     )
+
+    # Trigger event: pending.denied
+    await Events.pending_denied(denied_connection)
 
     if payload.ignore_connection:
 

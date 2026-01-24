@@ -194,16 +194,18 @@ class MongoDb:
             filter={"_id": ObjectId(connection_id)}
         )
 
-        print(f"{pending_connection_payload=}")
-
         requested_service: dict = pending_connection_payload.get("service")
-        service_expiry = datetime.now(timezone.utc) + timedelta(hours=requested_service.get("expiry")) if requested_service.get("expiry") is not None else None
+
+        if requested_service.get("expiry"):
+            connection_expiry = datetime.now(timezone.utc) + timedelta(minutes=requested_service.get("expiry"))
+        else:
+            connection_expiry = None
 
         allowed_connection_payload = AllowedConnectionModel(
             contact_methods=pending_connection_payload.get("contact_methods"),
             ip_address=pending_connection_payload.get("ip_address"),
             service_name=requested_service.get("name"),
-            ExpireAt=service_expiry
+            ExpireAt=connection_expiry
         )
 
         allowed_collection.insert_one(

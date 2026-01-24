@@ -1,0 +1,17 @@
+{
+    "event": "pending.new",
+    "method": "POST",
+    "url": "http://192.168.1.192:8000/adb/send-text-message",
+    "headers": {
+        "accept": "application/json",
+        "Authorization": "Bearer <TOKEN_HERE>",
+        "Content-Type": "application/json"
+    },
+    "query_params": {},
+    "cookies": {},
+    "body": {
+        "device_id": null,
+        "phone_number": "<OWNER_PHONE_NUMBER>",
+        "message": "Alert from Access-Manager request{{nl}}Service: {{service}}{{nl}}IP: {{ip_address}}{{nl}}Date: {{date}} at {{time}}{{note}}"
+    }
+}

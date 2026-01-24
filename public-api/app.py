@@ -2,8 +2,8 @@ import os
 import time
 import uvicorn
 from dotenv import load_dotenv
+from common_custom.utils.webhook_events import Events
 from fastapi import FastAPI, status, HTTPException, Request
-from typing import Optional, Annotated, Literal  # NOQA: F401
 from pydantic import BaseModel, Field, IPvAnyAddress, BeforeValidator, AfterValidator  # NOQA: F401
 from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
 from common_custom.controllers.mongodb import MongoDb
@@ -126,30 +126,8 @@ async def request_access_landing(access_request: AccessRequest, request: Request
                     request_longitude=access_request.lon
                 )
 
-                # Trigger event: pending.new (webhook request TODO)
-
-                webhook_available = await mongodb_helper.get_webhook(event="pending.new")
-
-                if webhook_available:
-
-                    webhook_request = HTTPRequest(
-                        **webhook_available
-                    )
-
-                    # Available message variables: {{ip_address}}, {{service}}, {{note}}, {{date}}, {{time}} {{time_seconds}}
-                    context = {
-                        "ip_address": remote_address,
-                        "service": service.name,
-                        "note": access_request.note,
-                        "date": time.strftime("%Y-%m-%d", time.gmtime()),
-                        "time": time.strftime("%H:%M", time.gmtime()),
-                        "time_seconds": time.strftime("%H:%M:%S", time.gmtime())
-                    }
-
-                    response = await WebhookValidator.execute_webhook(webhook_request, context)
-
-                    print(f"Webhook invoked with status code: {response.status_code}")
-                    print(f"Response content: {response.text}")
+                # Trigger event: pending.new
+                await Events.pending_new(access_request, remote_address, service)
 
     if len(services_allowed_to_request) == 0:
 

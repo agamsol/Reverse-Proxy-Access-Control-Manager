@@ -1,8 +1,8 @@
 import os
+from datetime import datetime
 from dotenv import load_dotenv
-from typing import Literal, Optional  # NOQA: F401
-from fastapi import APIRouter, status, HTTPException, Request, Depends, Form, Path  # NOQA: F401
-from pydantic import BaseModel, Field, IPvAnyAddress, BeforeValidator, AfterValidator  # NOQA: F401
+from common_custom.utils.webhook_events import Events
+from fastapi import APIRouter, status
 from common_custom.controllers.mongodb import MongoDb
 from common_custom.controllers.validators import MongoID
 from common_custom.controllers.pydantic.allowed_models import AllowedConnectionModel, DeniedConnectionModel
@@ -54,6 +54,8 @@ async def revoke_connection(id: MongoID):
     document_payload = await mongodb_helper.get_document(document_id=id, collection=allowed_connections)
 
     await mongodb_helper.revoke_connection(connection_id=id)
+
+    await Events.connection_revoked(document_payload)
 
     return document_payload
 
