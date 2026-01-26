@@ -1,0 +1,17 @@
+{
+    "event": "pending.denied",
+    "method": "POST",
+    "url": "http://192.168.1.192:8000/adb/send-text-message",
+    "headers": {
+        "accept": "application/json",
+        "Authorization": "Bearer <TOKEN_HERE>",
+        "Content-Type": "application/json"
+    },
+    "query_params": {},
+    "cookies": {},
+    "body": {
+        "device_id": null,
+        "phone_number": "{{phone_number}}",
+        "message": "Hello from Access-Manager{{nl}}Your connection request to {{service}} was denied by an admin"
+    }
+}

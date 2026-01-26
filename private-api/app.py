@@ -49,7 +49,7 @@ async def service_status():
         maintenance=SERVICE_UNDER_MAINTENANCE
     )
 
-    return status_reponse.model_dump(mode="json")
+    return status_reponse
 
 app.include_router(
     router=auth.router
@@ -74,6 +74,7 @@ app.include_router(
     router=webhook.router,
     dependencies=[Depends(oauth2_token_scheme)]  # Alternativly: Annotated[str, Depends(oauth2_token_scheme)]
 )
+
 # Tags for API documentation
 # ✅ Health
 # ✅ Authentication

@@ -68,7 +68,7 @@ async def deny_connection(
     payload: DenyConnectionRequestModel
 ):
 
-    await mongodb_helper.get_document(document_id=id)
+    pending_connection = await mongodb_helper.get_document(document_id=id)
 
     denied_connection = await mongodb_helper.deny_pending_connection(
         connection_id=id,
@@ -76,7 +76,7 @@ async def deny_connection(
     )
 
     # Trigger event: pending.denied
-    await Events.pending_denied(denied_connection)
+    await Events.pending_denied(pending_connection)
 
     if payload.ignore_connection:
 

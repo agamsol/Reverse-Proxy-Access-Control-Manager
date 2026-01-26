@@ -89,7 +89,7 @@ class Events:
             return response
 
     @staticmethod
-    async def pending_denied():
+    async def pending_denied(pending_connection):
 
         webhook_available = await mongodb_helper.get_webhook(event="pending.denied")
 
@@ -99,13 +99,16 @@ class Events:
                 **webhook_available
             )
 
+            print(pending_connection)
+
             # Available message variables: {{phone_number}}, {{service}}, {{expiry_date}}, {{expiry_time}}, {{expiry_time_seconds}}, {{nl}}
             context = {
-                "phone_number": next(iter(allowed_connection_payload.contact_methods.phone_number)),
-                "service": allowed_connection_payload.service_name,
-                "expiry_date": allowed_connection_payload.ExpireAt.strftime("%Y-%m-%d"),
-                "expiry_time": allowed_connection_payload.ExpireAt.strftime("%H:%M"),
-                "expiry_time_seconds": allowed_connection_payload.ExpireAt.strftime("%H:%M:%S"),
+                "email": pending_connection.get("contact_methods", {}).get("email", {}),
+                "phone_number": next(iter(pending_connection.get("contact_methods", {}).get("phone_number", {}))),
+                "service": pending_connection.get("service", {}).get("name", "Unknown"),
+                "date": time.strftime("%Y-%m-%d", time.gmtime()),
+                "time": time.strftime("%H:%M", time.gmtime()),
+                "time_seconds": time.strftime("%H:%M:%S", time.gmtime()),
                 "nl": "\n"
             }
 
