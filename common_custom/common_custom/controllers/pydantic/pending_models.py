@@ -6,14 +6,19 @@ from common_custom.controllers.pydantic.service_models import ServiceItem
 
 class ContactMethodsRequestModel(BaseModel):
     name: Optional[str] = Field(..., examples=[None])
-    email: Optional[EmailStr] = Field(..., examples=["mail@example.com"])
+    email: Optional[EmailStr] = Field(..., examples=[None])
     phone_number: Optional[str] = Field(..., examples=[None])
 
 
 class ContactMethodsModel(BaseModel):
-    name: Optional[str] = Field(..., examples=[None])
-    email: Optional[dict[EmailStr, bool]] = Field(..., examples=[{"mail@example.com"}])
-    phone_number: Optional[dict[Optional[str], bool]] = Field(..., examples=[{"+12021234567"}])
+    name: Optional[str] = Field(..., examples=[None], max_length=32)
+    email: Optional[dict[EmailStr, bool]]
+    phone_number: Optional[dict[Optional[str], bool]]
+
+
+class LocationRequestModel(BaseModel):
+    lat: Optional[float] = Field(None, ge=-90, le=90, examples=[None], description="Latitude of the requester")
+    lon: Optional[float] = Field(None, ge=-180, le=180, examples=[None], description="Longitude of the requester")
 
 
 class PendingConnectionDatabaseModel(BaseModel):
@@ -21,9 +26,8 @@ class PendingConnectionDatabaseModel(BaseModel):
     contact_methods: ContactMethodsModel
     ip_address: IPvAnyAddress
     service: ServiceItem | None = None
-    notes: str | None = Field(None, max_length=200, description="Note for the access request")
-    lat: float | None = Field(None, ge=-90, le=90)
-    lon: float | None = Field(None, ge=-180, le=180)
+    location: LocationRequestModel
+    notes: str | None = Field(None, max_length=200, description="Leave a note for the admin")
 
 
 class DenyConnectionRequestModel(BaseModel):

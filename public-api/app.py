@@ -2,16 +2,15 @@ import os
 import time
 import uvicorn
 from dotenv import load_dotenv
+from pydantic import BaseModel, IPvAnyAddress, Field
+from common_custom.controllers.mongodb import MongoDb
 from common_custom.utils.webhook_events import Events
 from fastapi import FastAPI, status, HTTPException, Request
-from pydantic import BaseModel, Field, IPvAnyAddress, BeforeValidator, AfterValidator  # NOQA: F401
 from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
-from common_custom.controllers.mongodb import MongoDb
-from common_custom.utils.pydantic.webhook_models import HTTPRequest, WebhookValidator
 from common_custom.controllers.pydantic.service_models import ServiceItem
 from common_custom.utils.pydantic.health_models import StatusResponseModel
 from common_custom.controllers.pydantic.service_models import ServiceResponseModel
-from common_custom.controllers.pydantic.pending_models import ContactMethodsRequestModel, ContactMethodsModel
+from common_custom.controllers.pydantic.pending_models import ContactMethodsRequestModel, ContactMethodsModel, LocationRequestModel
 
 
 load_dotenv(".env")
@@ -43,8 +42,7 @@ class AccessRequest(BaseModel):
     services: list[ServiceItem] | None = Field(None, description="List of all of the service that will be requested")
     contact_methods: ContactMethodsRequestModel
     note: str | None = Field(None, max_length=200, examples=[None], description="Note for the access request")
-    lat: float | None = Field(None, ge=-90, le=90, examples=[None], description="Latitude of the requester")
-    lon: float | None = Field(None, ge=-180, le=180, examples=[None], description="Longitude of the requester")
+    location: LocationRequestModel
 
 
 class RequestAccessResponseModel(BaseModel):
@@ -122,8 +120,8 @@ async def request_access_landing(access_request: AccessRequest, request: Request
                     remote_address=remote_address,
                     service=service.model_dump(),
                     additional_notes=access_request.note,
-                    request_latitude=access_request.lat,
-                    request_longitude=access_request.lon
+                    request_latitude=access_request.location.lat,
+                    request_longitude=access_request.location.lon
                 )
 
                 # Trigger event: pending.new

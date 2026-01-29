@@ -5,11 +5,14 @@ from pymongo import MongoClient, database
 from pymongo.collection import Collection
 from datetime import datetime, timedelta, timezone
 from common_custom.controllers.validators import MongoID
-from common_custom.controllers.pydantic.pending_models import PendingConnectionDatabaseModel
+from common_custom.controllers.pydantic.pending_models import (
+    PendingConnectionDatabaseModel,
+    ContactMethodsModel,
+    LocationRequestModel
+)
 from common_custom.controllers.pydantic.service_models import ServiceResponseModel
 from common_custom.controllers.pydantic.allowed_models import AllowedConnectionModel, DeniedConnectionModel
 from common_custom.utils.pydantic.webhook_models import HTTPRequest
-from common_custom.controllers.pydantic.pending_models import ContactMethodsModel
 
 
 # # Collections to be used (add, remove, get, list)
@@ -85,8 +88,7 @@ class MongoDb:
             ip_address=remote_address,
             service=service,
             notes=additional_notes,
-            lat=request_latitude,
-            lon=request_longitude,
+            location=LocationRequestModel(lat=request_latitude, lon=request_longitude),
         )
 
         validated_document = document_payload.model_dump(mode="json", exclude={"id"})
@@ -271,8 +273,43 @@ class MongoDb:
 
         return http_request_document
 
-    async def modify_webhook(self):
-        pass
+    async def modify_webhook(self, event: str, update_fields: dict):
+        """
+        Modifies an existing webhook by updating only the specified fields.
+        
+        Args:
+            event: The event name of the webhook to modify
+            update_fields: Dictionary containing only the fields to update
+        
+        Returns:
+            The updated webhook document or None if not found
+        """
 
-    async def delete_webhook(self):
-        pass
+        fields_to_update = {k: v for k, v in update_fields.items() if v is not None}
+        
+        if not fields_to_update:
+            return self.database[self.webhooks_collection_name].find_one({"event": event})
+        
+        updated_document = self.database[self.webhooks_collection_name].find_one_and_update(
+            filter={"event": event},
+            update={"$set": fields_to_update},
+            return_document=True
+        )
+        
+        return updated_document
+
+    async def delete_webhook(self, event: str):
+        """
+        Deletes a webhook by its event name.
+        
+        Args:
+            event: The event name of the webhook to delete
+        
+        Returns:
+            The deleted document or None if not found
+        """
+        deleted_document = self.database[self.webhooks_collection_name].find_one_and_delete(
+            filter={"event": event}
+        )
+        
+        return deleted_document

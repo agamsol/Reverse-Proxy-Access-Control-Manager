@@ -4,7 +4,14 @@ from typing import Literal, Optional  # NOQA: F401
 from fastapi import APIRouter, status, HTTPException, Request, Depends, Form, Path  # NOQA: F401
 from pydantic import BaseModel, Field, IPvAnyAddress, BeforeValidator, AfterValidator  # NOQA: F401
 from common_custom.controllers.mongodb import MongoDb
-from common_custom.utils.pydantic.webhook_models import HTTPRequest, CreateWebhookResponseModel
+from common_custom.utils.pydantic.webhook_models import (
+    HTTPRequest,
+    CreateWebhookResponseModel,
+    DeleteWebhookRequestModel,
+    DeleteWebhookResponseModel,
+    ModifyWebhookRequestModel,
+    ModifyWebhookResponseModel
+)
 
 load_dotenv(".env")
 
@@ -62,4 +69,63 @@ async def create_webhook(request_payload: HTTPRequest):
     return CreateWebhookResponseModel(
         **request_payload.model_dump(),
         message="The webhook has been successfully created!"
+    )
+
+@router.delete(
+    "/remove-webhook",
+    summary="Remove a webhook for a specific event",
+    status_code=status.HTTP_200_OK,
+    response_model=DeleteWebhookResponseModel
+)
+async def remove_webhook(request_payload: DeleteWebhookRequestModel):
+
+    event_document = await mongodb_helper.get_webhook(event=request_payload.event)
+
+    if not event_document:
+        raise HTTPException(
+            detail="No webhook found for this event.",
+            status_code=status.HTTP_404_NOT_FOUND
+        )
+
+    await mongodb_helper.delete_webhook(event=request_payload.event)
+
+    return DeleteWebhookResponseModel(
+        event=request_payload.event,
+        message="The webhook has been successfully deleted!"
+    )
+
+
+@router.patch(
+    "/modify-webhook",
+    summary="Modify an existing webhook's details",
+    status_code=status.HTTP_200_OK,
+    response_model=ModifyWebhookResponseModel
+)
+async def modify_webhook(request_payload: ModifyWebhookRequestModel):
+
+    event_document = await mongodb_helper.get_webhook(event=request_payload.event)
+
+    if not event_document:
+        raise HTTPException(
+            detail="No webhook found for this event.",
+            status_code=status.HTTP_404_NOT_FOUND
+        )
+
+    # Extract only the fields that should be updated (exclude event as it's the identifier)
+    update_fields = request_payload.model_dump(exclude={"event"}, exclude_none=True)
+
+    updated_document = await mongodb_helper.modify_webhook(
+        event=request_payload.event,
+        update_fields=update_fields
+    )
+
+    return ModifyWebhookResponseModel(
+        event=updated_document.get("event"),
+        method=updated_document.get("method"),
+        url=updated_document.get("url"),
+        headers=updated_document.get("headers"),
+        query_params=updated_document.get("query_params"),
+        cookies=updated_document.get("cookies"),
+        body=updated_document.get("body"),
+        message="The webhook has been successfully modified!"
     )

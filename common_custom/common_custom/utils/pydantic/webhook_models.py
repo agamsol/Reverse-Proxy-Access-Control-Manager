@@ -5,8 +5,11 @@ from pydantic import BaseModel
 from typing import Any, Dict, Optional, Literal
 
 
-class HTTPRequest(BaseModel):
+class WebhookEventBase(BaseModel):
     event: Literal["pending.new", "pending.accepted", "pending.denied", "connection.revoked"]
+
+
+class HTTPRequest(WebhookEventBase):
     method: Literal["GET", "HEAD", "POST", "PUT", "DELETE"]
     url: str
     headers: Optional[Dict[str, Any]] = None
@@ -17,6 +20,27 @@ class HTTPRequest(BaseModel):
 
 class CreateWebhookResponseModel(HTTPRequest):
     message: Literal["The webhook has been successfully created!"]
+
+
+class DeleteWebhookRequestModel(WebhookEventBase):
+    pass
+
+
+class DeleteWebhookResponseModel(WebhookEventBase):
+    message: Literal["The webhook has been successfully deleted!"]
+
+
+class ModifyWebhookRequestModel(WebhookEventBase):
+    method: Optional[Literal["GET", "HEAD", "POST", "PUT", "DELETE"]] = None
+    url: Optional[str] = None
+    headers: Optional[Dict[str, Any]] = None
+    query_params: Optional[Dict[str, Any]] = None
+    cookies: Optional[Dict[str, Any]] = None
+    body: Optional[Dict[str, Any]] = None
+
+
+class ModifyWebhookResponseModel(HTTPRequest):
+    message: Literal["The webhook has been successfully modified!"]
 
 
 class WebhookValidator:
