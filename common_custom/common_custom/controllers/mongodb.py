@@ -276,40 +276,40 @@ class MongoDb:
     async def modify_webhook(self, event: str, update_fields: dict):
         """
         Modifies an existing webhook by updating only the specified fields.
-        
+
         Args:
             event: The event name of the webhook to modify
             update_fields: Dictionary containing only the fields to update
-        
+
         Returns:
             The updated webhook document or None if not found
         """
 
         fields_to_update = {k: v for k, v in update_fields.items() if v is not None}
-        
+
         if not fields_to_update:
             return self.database[self.webhooks_collection_name].find_one({"event": event})
-        
+
         updated_document = self.database[self.webhooks_collection_name].find_one_and_update(
             filter={"event": event},
             update={"$set": fields_to_update},
             return_document=True
         )
-        
+
         return updated_document
 
     async def delete_webhook(self, event: str):
         """
         Deletes a webhook by its event name.
-        
+
         Args:
             event: The event name of the webhook to delete
-        
+
         Returns:
             The deleted document or None if not found
         """
         deleted_document = self.database[self.webhooks_collection_name].find_one_and_delete(
             filter={"event": event}
         )
-        
+
         return deleted_document

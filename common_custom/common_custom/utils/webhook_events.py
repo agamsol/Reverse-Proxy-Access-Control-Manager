@@ -98,11 +98,13 @@ class Events:
             context = await Events.default_context(allowed_connection_payload.contact_methods.name, allowed_connection_payload.contact_methods.phone_number, allowed_connection_payload.contact_methods.email)
 
             # Available message variables: {{phone_number}}, {{service}}, {{expiry_date}}, {{expiry_time}}, {{expiry_time_seconds}}, {{nl}}
+            has_expiry = allowed_connection_payload.ExpireAt is not None
+
             additional_context = {
                 "service": allowed_connection_payload.service_name,
-                "expiry_date": allowed_connection_payload.ExpireAt.strftime("%Y-%m-%d"),
-                "expiry_time": allowed_connection_payload.ExpireAt.strftime("%H:%M"),
-                "expiry_time_seconds": allowed_connection_payload.ExpireAt.strftime("%H:%M:%S"),
+                "expiry_date": allowed_connection_payload.ExpireAt.strftime("%Y-%m-%d") if has_expiry else "Permanent",
+                "expiry_time": allowed_connection_payload.ExpireAt.strftime("%H:%M") if has_expiry else "Permanent",
+                "expiry_time_seconds": allowed_connection_payload.ExpireAt.strftime("%H:%M:%S") if has_expiry else "Permanent",
             }
 
             context.update(additional_context)

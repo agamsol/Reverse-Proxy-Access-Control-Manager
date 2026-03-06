@@ -50,7 +50,7 @@ async def get_pending_connections():
 async def accept_connection(id: MongoID):
 
     allowed_connection_payload = await mongodb_helper.accept_pending_connection(connection_id=id)
-    
+
     # Trigger event: pending.accepted
     await Events.pending_accepted(allowed_connection_payload)
 
