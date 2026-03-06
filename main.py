@@ -175,6 +175,8 @@ def main():
 
     log.info(f"All connections: {all_connections}")
 
+    # Essambling the connections config generator by all connections (And auto reload on changes)
+
 
 if __name__ == "__main__":
     main()

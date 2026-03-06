@@ -103,13 +103,11 @@ class Backend:
                     log.warning(f"Connection document from address {connection['ip_address']} has a service {connection['service_name']} that does not exist - denying connection")
                     continue
 
-                if not datetime.fromisoformat(connection["ExpireAt"]):
-                    log.warning(f"Connection document from address {connection['ip_address']} has an invalid ExpireAt value - denying connection")
-                    continue
+                if connection["ExpireAt"]:
 
-                if datetime.fromisoformat(connection["ExpireAt"]) < datetime.now(timezone.utc):
-                    log.warning(f"Connection document from address {connection['ip_address']} has expired - denying connection")
-                    continue
+                    if datetime.fromisoformat(connection["ExpireAt"]) < datetime.now(timezone.utc):
+                        log.warning(f"Connection document from address {connection['ip_address']} has expired - denying connection")
+                        continue
 
             except Exception as e:
 
