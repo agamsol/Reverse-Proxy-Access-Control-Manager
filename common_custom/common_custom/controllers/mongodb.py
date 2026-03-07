@@ -222,9 +222,9 @@ class MongoDb:
             ExpireAt=connection_expiry
         )
 
-        allowed_collection.insert_one(
-            allowed_connection_payload.model_dump(exclude={"id"})
-        )
+        doc = allowed_connection_payload.model_dump(exclude={"id"})
+        doc["ip_address"] = str(doc["ip_address"])
+        allowed_collection.insert_one(doc)
 
         return allowed_connection_payload
 
