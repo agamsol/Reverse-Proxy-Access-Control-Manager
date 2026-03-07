@@ -55,6 +55,3 @@ Triggered when an existing connection is revoked.
 | Variable | Description |
 | :--- | :--- |
 | `{{service}}` | The name of the service access was revoked for. |
-| `{{expiry_date}}` | The original expiration date of the connection (Format: `YYYY-MM-DD`). |
-| `{{expiry_time}}` | The original expiration time of the connection (Format: `HH:MM`). |
-| `{{expiry_time_seconds}}` | The original expiration time with seconds (Format: `HH:MM:SS`). |

@@ -1,5 +1,5 @@
 import os
-from datetime import datetime
+from datetime import datetime, timezone
 from dotenv import load_dotenv
 from common_custom.utils.webhook_events import Events
 from fastapi import APIRouter, status
@@ -20,6 +20,7 @@ mongodb = mongodb_helper.connect(
     password=os.getenv("MONGODB_PASSWORD")
 )
 
+services = mongodb_helper.database[mongodb_helper.services_collection_name]
 allowed_connections = mongodb_helper.database[mongodb_helper.allowed_collection_name]
 ignored_connections = mongodb_helper.database[mongodb_helper.ignored_collection_name]
 
@@ -39,8 +40,18 @@ router = APIRouter(
 async def get_all_connections():
 
     connections = await mongodb_helper.get_all_documents(collection=allowed_connections)
+    all_services = await mongodb_helper.get_all_documents(collection=services)
 
-    return connections
+    valid_service_names = {service["name"] for service in all_services}
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
+
+    filtered = [
+        conn for conn in connections
+        if conn.get("service_name") in valid_service_names
+        and (conn.get("ExpireAt") is None or conn["ExpireAt"] > now)
+    ]
+
+    return filtered
 
 
 @router.delete(

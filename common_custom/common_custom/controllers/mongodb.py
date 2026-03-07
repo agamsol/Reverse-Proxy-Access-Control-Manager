@@ -1,7 +1,7 @@
 from bson import ObjectId
 from typing import Literal
 from fastapi import HTTPException
-from pymongo import MongoClient, database
+from pymongo import ASCENDING, MongoClient, database
 from pymongo.collection import Collection
 from datetime import datetime, timedelta, timezone
 from common_custom.controllers.validators import MongoID
@@ -71,7 +71,19 @@ class MongoDb:
         self.client = mongo_client
         self.database = mongo_client[self.database_name]
 
+        self._ensure_ttl_indexes()
+
         return mongo_client[self.database_name]
+
+    def _ensure_ttl_indexes(self):
+        ttl_collections = [self.allowed_collection_name]
+        for name in ttl_collections:
+            collection = self.database[name]
+            collection.create_index(
+                [("ExpireAt", ASCENDING)],
+                expireAfterSeconds=0,
+                name="expire_at_ttl",
+            )
 
     async def create_pending_connection(
         self,
@@ -211,7 +223,7 @@ class MongoDb:
         )
 
         allowed_collection.insert_one(
-            allowed_connection_payload.model_dump(mode="json", exclude={"id"})
+            allowed_connection_payload.model_dump(exclude={"id"})
         )
 
         return allowed_connection_payload

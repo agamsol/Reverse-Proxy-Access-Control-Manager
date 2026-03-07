@@ -153,15 +153,10 @@ class Events:
                 **webhook_available
             )
 
-            expiry_date = datetime.fromisoformat(document_payload.get("ExpireAt"))
-
             context = await Events.default_context(document_payload.get("contact_methods", {}).get("name", {}), document_payload.get("contact_methods", {}).get("phone_number", {}), document_payload.get("contact_methods", {}).get("email", {}))
 
             additional_context = {
                 "service": document_payload.get("service_name"),
-                "expiry_date": expiry_date.strftime("%Y-%m-%d"),
-                "expiry_time": expiry_date.strftime("%H:%M"),
-                "expiry_time_seconds": expiry_date.strftime("%H:%M:%S"),
             }
 
             context.update(additional_context)
