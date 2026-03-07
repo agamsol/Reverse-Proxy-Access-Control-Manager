@@ -1,0 +1,30 @@
+{
+    "event": "pending.new",
+    "method": "POST",
+    "url": "https://api.sendgrid.com/v3/mail/send",
+    "headers": {
+        "Authorization": "Bearer <SENDGRID_API_KEY>",
+        "Content-Type": "application/json"
+    },
+    "query_params": {},
+    "cookies": {},
+    "body": {
+        "personalizations": [
+            {
+                "to": [
+                    { "email": "{{owner_email}}" }
+                ]
+            }
+        ],
+        "from": {
+            "email": "<SENDER_EMAIL>"
+        },
+        "subject": "New Access Request — {{service}}",
+        "content": [
+            {
+                "type": "text/plain",
+                "value": "A new access request has been received.{{nl}}{{nl}}Service: {{service}}{{nl}}IP Address: {{ip_address}}{{nl}}Name: {{name}}{{nl}}Email: {{email}}{{nl}}Phone: {{phone_number}}{{nl}}Note: {{note}}{{nl}}{{nl}}Date: {{date}} at {{time}}"
+            }
+        ]
+    }
+}

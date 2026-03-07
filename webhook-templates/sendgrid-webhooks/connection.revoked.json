@@ -1,0 +1,30 @@
+{
+    "event": "connection.revoked",
+    "method": "POST",
+    "url": "https://api.sendgrid.com/v3/mail/send",
+    "headers": {
+        "Authorization": "Bearer <SENDGRID_API_KEY>",
+        "Content-Type": "application/json"
+    },
+    "query_params": {},
+    "cookies": {},
+    "body": {
+        "personalizations": [
+            {
+                "to": [
+                    { "email": "{{email}}" }
+                ]
+            }
+        ],
+        "from": {
+            "email": "<SENDER_EMAIL>"
+        },
+        "subject": "Access Revoked — {{service}}",
+        "content": [
+            {
+                "type": "text/plain",
+                "value": "Hello {{name}},{{nl}}{{nl}}Your access to {{service}} has been revoked.{{nl}}{{nl}}— {{owner_name}}"
+            }
+        ]
+    }
+}

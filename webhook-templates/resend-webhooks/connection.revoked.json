@@ -1,0 +1,17 @@
+{
+    "event": "connection.revoked",
+    "method": "POST",
+    "url": "https://api.resend.com/emails",
+    "headers": {
+        "Authorization": "Bearer <RESEND_API_KEY>",
+        "Content-Type": "application/json"
+    },
+    "query_params": {},
+    "cookies": {},
+    "body": {
+        "from": "<SENDER_EMAIL>",
+        "to": ["{{email}}"],
+        "subject": "Access Revoked — {{service}}",
+        "text": "Hello {{name}},{{nl}}{{nl}}Your access to {{service}} has been revoked.{{nl}}{{nl}}— {{owner_name}}"
+    }
+}

@@ -1,0 +1,53 @@
+{
+    "event": "pending.new",
+    "method": "POST",
+    "url": "<DISCORD_WEBHOOK_URL>",
+    "headers": {
+        "Content-Type": "application/json"
+    },
+    "query_params": {},
+    "cookies": {},
+    "body": {
+        "embeds": [
+            {
+                "title": "New Access Request",
+                "color": 16750848,
+                "fields": [
+                    {
+                        "name": "Service",
+                        "value": "{{service}}",
+                        "inline": true
+                    },
+                    {
+                        "name": "IP Address",
+                        "value": "{{ip_address}}",
+                        "inline": true
+                    },
+                    {
+                        "name": "Name",
+                        "value": "{{name}}",
+                        "inline": true
+                    },
+                    {
+                        "name": "Email",
+                        "value": "{{email}}",
+                        "inline": true
+                    },
+                    {
+                        "name": "Phone",
+                        "value": "{{phone_number}}",
+                        "inline": true
+                    },
+                    {
+                        "name": "Note",
+                        "value": "{{note}}",
+                        "inline": false
+                    }
+                ],
+                "footer": {
+                    "text": "{{date}} at {{time}}"
+                }
+            }
+        ]
+    }
+}

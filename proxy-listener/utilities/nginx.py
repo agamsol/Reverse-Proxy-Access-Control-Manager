@@ -202,7 +202,9 @@ class Nginx:
             allowed_ips.append("deny all;")
 
             if SERVER_NAME:
-                allowed_ips.append("error_page 403 = " + SERVER_NAME + "/;")
+
+                content = "error_page 403 = " + SERVER_NAME + "/;"
+                allowed_ips.append(content)
 
             with open(filepath, "w") as f:
                 f.write("\n".join(allowed_ips))
