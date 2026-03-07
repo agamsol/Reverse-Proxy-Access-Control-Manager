@@ -1,0 +1,93 @@
+import os
+import time
+from dotenv import load_dotenv
+from utilities.nginx import Nginx
+from utilities.backend import Backend
+from utilities.logger import create_logger
+
+DOTENV_FILE = ".env"
+
+load_dotenv(DOTENV_FILE)
+
+POLLING_INTERVAL = int(os.getenv("POLLING_INTERVAL", 60))
+
+log = create_logger(logger_name="ProxyListener_util_polling", alias="Polling")
+
+
+class PollingAndProcessing:
+
+    def __init__(self, nginx_path: str, private_api: Backend) -> None:
+        self.nginx_path = nginx_path
+        self.private_api = private_api
+
+    def _fetch_all_services(self) -> list[dict] | None:
+
+        try:
+            all_services = self.private_api.get_service_list()
+            log.debug(f"Fetched {len(all_services)} service(s)")
+            return all_services
+        except Exception as e:
+            log.error(f"Failed to fetch services: {e}")
+            return None
+
+    def _fetch_all_connections(self, all_services: list[dict]) -> list[dict] | None:
+
+        try:
+            all_connections = self.private_api.get_connection_list(all_services=all_services)
+            log.debug(f"Fetched {len(all_connections)} valid connection(s)")
+            return all_connections
+        except Exception as e:
+            log.error(f"Failed to fetch connections: {e}")
+            return None
+
+    def poll_and_process(self) -> None:
+
+        log.info(f"Polling started (interval: {POLLING_INTERVAL}s)")
+
+        previous_fetch_connections = []
+        had_failure = False
+
+        while True:
+
+            all_services = self._fetch_all_services()
+
+            if all_services is None:
+                log.warning("Skipping cycle — could not fetch services")
+                had_failure = True
+                time.sleep(POLLING_INTERVAL)
+                continue
+
+            all_connections = self._fetch_all_connections(all_services)
+
+            if all_connections is None:
+                log.warning("Skipping cycle — could not fetch connections")
+                had_failure = True
+                time.sleep(POLLING_INTERVAL)
+                continue
+
+            if had_failure:
+                log.info("Connection to private API resumed")
+                had_failure = False
+
+            if previous_fetch_connections == all_connections:
+                time.sleep(POLLING_INTERVAL)
+                continue
+
+            log.info(f"Connection change detected — {len(all_connections)} active connection(s)")
+            previous_fetch_connections = all_connections
+
+            if not all_connections:
+                log.info("Connection list is now empty, skipping nginx update")
+                time.sleep(POLLING_INTERVAL)
+                continue
+
+            Nginx.address_whitelist_config_generator(
+                nginx_path=self.nginx_path,
+                services=all_services,
+                connections=all_connections,
+            )
+            log.info("Nginx whitelist configs updated, reloading nginx")
+
+            Nginx.nginx_run("-s", "reload")
+
+            time.sleep(POLLING_INTERVAL)
