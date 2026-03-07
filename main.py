@@ -1,9 +1,11 @@
 import os
-from dotenv import load_dotenv, set_key
 from colorama import Fore, Style
 from utilities.nginx import Nginx
 from utilities.backend import Backend
+from dotenv import load_dotenv, set_key
 from utilities.logger import create_logger
+from utilities.polling import PollingAndProcessing
+
 
 ENV_PATH = os.path.join(os.path.dirname(__file__), ".env")
 
@@ -27,9 +29,6 @@ def prompt_or_env(env_key: str, label: str, description: str, example: str, forc
         f"  {hint}\n"
         f"  {PROMPT_ICON}"
     ).strip()
-
-    if env_key == "SERVER_NAME":
-        value = value + ".conf"
 
     set_key(ENV_PATH, env_key, value)
     return value
@@ -70,7 +69,7 @@ def main():
     server_name = prompt_or_env(
         "SERVER_NAME", "Server Name",
         "the domain that will serve the access request page",
-        "e.g. request-access.example.com",
+        "e.g. http(s)://request-access.example.com",
     )
     public_api_host = prompt_or_env(
         "PUBLIC_API_HOST", "Public API Host",
@@ -111,7 +110,7 @@ def main():
 
         try:
 
-            backend = Backend(host=private_api_host, port=private_api_port)
+            private_api = Backend(host=private_api_host, port=private_api_port)
             break
 
         except ConnectionError as e:
@@ -139,7 +138,7 @@ def main():
 
         try:
 
-            backend.authenticate(
+            private_api.authenticate(
                 username=private_api_username,
                 password=private_api_password,
             )
@@ -153,29 +152,9 @@ def main():
 
         continue
 
-    try:
-
-        all_services = backend.get_service_list()
-
-    except Exception as e:
-
-        log.error(f"Failed to fetch services at startup: {e}")
-        return
-
-    log.info(f"Loaded {len(all_services)} services")
-
-    try:
-
-        all_connections = backend.get_connection_list(all_services=all_services)
-
-    except Exception as e:
-
-        log.error(f"Failed to fetch connections at startup: {e}")
-        return
-
-    log.info(f"All connections: {all_connections}")
-
-    # Essambling the connections config generator by all connections (And auto reload on changes)
+    # Authentication Complete
+    polling_and_processing = PollingAndProcessing(nginx_path=nginx_path, private_api=private_api)
+    polling_and_processing.poll_and_process()
 
 
 if __name__ == "__main__":

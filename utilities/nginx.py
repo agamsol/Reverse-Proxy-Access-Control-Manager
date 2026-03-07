@@ -1,13 +1,17 @@
 import os
 import shutil
 import subprocess
-from dotenv import set_key
+from dotenv import load_dotenv, set_key
 from pydantic import IPvAnyAddress
 from schemas.nginx_configuration import FALLBACK_WEBSITE_NGINX_CONFIG_TEMPLATE
 from utilities.logger import create_logger
 
 DOTENV_PATH = ".env"
 DEFAULT_NGINX_PATH = "/etc/nginx"
+
+load_dotenv(DOTENV_PATH)
+
+SERVER_NAME = os.getenv("SERVER_NAME")
 
 log = create_logger(logger_name="ProxyListener_util_nginx", alias="nginx")
 
@@ -126,6 +130,7 @@ class Nginx:
 
         return result.stdout.strip()[:12]
 
+    @staticmethod
     def generate_nginx_config_for_request_access_server(
         nginx_path: str,
         server_name: str,
@@ -147,11 +152,13 @@ class Nginx:
             _type_: _description_
         """
 
-        available = os.path.join(nginx_path, "sites-available", server_name + ".conf")
-        enabled = os.path.join(nginx_path, "sites-enabled", server_name + ".conf")
+        server_name_no_protocol = server_name.split("://")[1]
+
+        available = os.path.join(nginx_path, "sites-available", server_name_no_protocol + ".conf")
+        enabled = os.path.join(nginx_path, "sites-enabled", server_name_no_protocol + ".conf")
 
         final_configuration_file = FALLBACK_WEBSITE_NGINX_CONFIG_TEMPLATE.format(
-            server_name=server_name,
+            server_name=server_name_no_protocol,
             backend_host=backend_host,
             backend_port=backend_port
         )
@@ -172,3 +179,34 @@ class Nginx:
 
         log.info(f"Config written: {available}")
         return available
+
+    @staticmethod
+    def address_whitelist_config_generator(nginx_path: str, services: list[dict], connections: list[dict]) -> None:
+        """Generate a Nginx configuration file for the address whitelist."""
+
+        for service in services:
+
+            filename = service['name'] + ".ips"
+            filepath = os.path.join(nginx_path, "allowed-ips", filename)
+            allowed_ips = []
+
+            for connection in connections:
+
+                if connection['service_name'] == service['name']:
+
+                    content = "allow " + connection['ip_address'] + ";"
+
+                    if content not in allowed_ips:
+                        allowed_ips.append(content)
+
+            allowed_ips.append("deny all;")
+
+            if SERVER_NAME:
+                allowed_ips.append("error_page 403 = " + SERVER_NAME + "/;")
+
+            with open(filepath, "w") as f:
+                f.write("\n".join(allowed_ips))
+
+            log.info(f"Address whitelist config generated at {filepath}")
+
+        return

@@ -1,5 +1,4 @@
 import requests
-from datetime import datetime, timezone
 from utilities.logger import create_logger
 
 log = create_logger(logger_name="ProxyListener_util_privateapi", alias="Private-API")
@@ -93,28 +92,4 @@ class Backend:
 
         response.raise_for_status()
 
-        valid_connections = []
-
-        for connection in response.json():
-
-            try:
-
-                if connection["service_name"] not in {s["name"] for s in all_services}:
-                    log.warning(f"Connection document from address {connection['ip_address']} has a service {connection['service_name']} that does not exist - denying connection")
-                    continue
-
-                if connection["ExpireAt"]:
-
-                    if datetime.fromisoformat(connection["ExpireAt"]) < datetime.now(timezone.utc):
-                        log.warning(f"Connection document from address {connection['ip_address']} has expired - denying connection")
-                        continue
-
-            except Exception as e:
-
-                log.warning(f"Error processing connection document ID {connection['_id']} (skipping document): {e}")
-
-                continue  # So that comparing corrupt document would'nt crash the script
-
-            valid_connections.append(connection)
-
-        return valid_connections
+        return response.json()
