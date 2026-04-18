@@ -1,7 +1,30 @@
+import sys
+import time
 import requests
+from concurrent.futures import ThreadPoolExecutor
 from utilities.logger import create_logger
 
 log = create_logger(logger_name="ProxyListener_util_privateapi", alias="Private-API")
+
+_ESTABLISHING = "Establishing connection with private API"
+_AQUA = "\033[96m"
+_RESET = "\033[0m"
+
+
+def _stderr_spin_while(condition) -> None:
+    """Aqua | / - \\ at line start, then _ESTABLISHING, while condition() is true."""
+    frames = "|/-\\"
+    i = 0
+    clear_w = max(len(_ESTABLISHING) + 10, 72)
+    while condition():
+        sys.stderr.write(
+            f"\r{_AQUA}{frames[i % 4]}{_RESET} {_ESTABLISHING}   "
+        )
+        sys.stderr.flush()
+        time.sleep(0.1)
+        i += 1
+    sys.stderr.write("\r" + " " * clear_w + "\r")
+    sys.stderr.flush()
 
 
 class Backend:
@@ -15,19 +38,23 @@ class Backend:
         self._base_url = f"http://{host}:{port}"
         self._token: str = ""
 
-        try:
+        while True:
 
-            self.get_status()
+            try:
 
-        except requests.exceptions.ConnectionError:
+                with ThreadPoolExecutor(max_workers=1) as executor:
+                    future = executor.submit(self.get_status)
+                    _stderr_spin_while(lambda: not future.done())
+                    future.result()
 
-            raise ConnectionError(f"Cannot reach private API at {self._base_url}")
+                break
 
-        except requests.exceptions.HTTPError as e:
+            except (ConnectionError, requests.exceptions.HTTPError):
 
-            raise ConnectionError(f"Private API status check failed: {e}")
+                deadline = time.monotonic() + 5
+                _stderr_spin_while(lambda: time.monotonic() < deadline)
 
-        log.info(f"Connected to private API at {self._base_url}")
+        log.info(f"Connected to private API ({self._base_url}).")
 
     def authenticate(self, username: str, password: str) -> str:
         """POST /auth/token — obtain and store a Bearer token.
@@ -64,7 +91,13 @@ class Backend:
 
     def get_status(self) -> dict:
         """GET /status — no auth required."""
-        response = requests.get(f"{self._base_url}/status")
+
+        try:
+
+            response = requests.get(f"{self._base_url}/status")
+
+        except requests.exceptions.ConnectionError:
+            raise ConnectionError(f"Cannot reach private API at {self._base_url}")
 
         response.raise_for_status()
 

@@ -181,13 +181,14 @@ class Nginx:
         return available
 
     @staticmethod
-    def address_whitelist_config_generator(nginx_path: str, services: list[dict], connections: list[dict]) -> None:
+    def address_whitelist_config_generator(nginx_path: str, services: list[dict], connections: list[dict]) -> str:
         """Generate a Nginx configuration file for the address whitelist."""
 
         for service in services:
 
             filename = service['name'] + ".ips"
-            filepath = os.path.join(nginx_path, "allowed-ips", filename)
+            path = os.path.join(nginx_path, "allowed-ips")
+            filepath = os.path.join(path, filename)
             allowed_ips = []
 
             for connection in connections:
@@ -211,4 +212,4 @@ class Nginx:
 
             log.info(f"Address whitelist config generated at {filepath}")
 
-        return
+        return path

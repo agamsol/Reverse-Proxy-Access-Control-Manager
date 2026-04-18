@@ -1,5 +1,6 @@
 import os
 import time
+import subprocess
 from dotenv import load_dotenv
 from utilities.nginx import Nginx
 from utilities.backend import Backend
@@ -10,6 +11,7 @@ DOTENV_FILE = ".env"
 load_dotenv(DOTENV_FILE)
 
 POLLING_INTERVAL = int(os.getenv("POLLING_INTERVAL", 60))
+DOCKER_CONFIGURATION_PRIMARY_PATH = os.getenv("DOCKER_CONFIGURATION_PRIMARY_PATH", "/etc/nginx/conf.d/")
 
 log = create_logger(logger_name="ProxyListener_util_polling", alias="Polling")
 
@@ -81,11 +83,40 @@ class PollingAndProcessing:
                 time.sleep(POLLING_INTERVAL)
                 continue
 
-            Nginx.address_whitelist_config_generator(
+            path = Nginx.address_whitelist_config_generator(
                 nginx_path=self.nginx_path,
                 services=all_services,
                 connections=all_connections,
             )
+
+            saved = os.environ.get("NGINX_BINARY", "").strip()
+
+            if saved and saved.startswith("docker"):
+
+                # Copy the files to the docker container! (Overwrite)
+
+                container_name = Nginx._find_nginx_docker_container()
+                container_id = Nginx._get_docker_container_id(container_name)
+
+                result = subprocess.run(
+                    f"docker cp {path} {container_name}:{DOCKER_CONFIGURATION_PRIMARY_PATH}",
+                    shell=True,
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                )
+
+                if result.returncode != 0:
+                    log.error(f"Failed to copy files to docker container {container_name} (ID: {container_id})")
+                    continue
+
+                n = sum(
+                    os.path.getsize(os.path.join(dp, f))
+                    for dp, _, fns in os.walk(path)
+                    for f in fns
+                )
+                sz = f"{n} B" if n < 1024 else f"{n / 1024:.1f} KB" if n < 1024**2 else f"{n / 1024**2:.1f} MB"
+                log.info(f"Copied {sz} to docker container {container_name} (ID: {container_id})")
+
             log.info("Nginx whitelist configs updated, reloading nginx")
 
             Nginx.nginx_run("-s", "reload")
