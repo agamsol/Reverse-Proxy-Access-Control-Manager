@@ -39,13 +39,14 @@
   letter-spacing: -0.01em;
 }
 
+/* App Store–style icon mask (CSS approx. of the iOS squircle) */
 .brand-mark {
-  width: 0.55rem;
-  height: 0.55rem;
-  border-radius: 999px;
-  background: var(--accent);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 22%, transparent);
-  font-size: 0;
+  width: 1.35rem;
+  height: 1.35rem;
+  border-radius: 22.37%;
+  object-fit: cover;
+  display: block;
+  flex: none;
 }
 
 .brand-text {
@@ -294,6 +295,13 @@
 
 .footer-meta {
   opacity: 0.9;
+}
+
+.footer-sep {
+  display: inline-block;
+  margin: 0 0.5rem;
+  color: var(--accent);
+  font-weight: 700;
 }
 
 .modal-overlay {

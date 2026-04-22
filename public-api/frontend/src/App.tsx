@@ -750,9 +750,12 @@ export default function App() {
       <div className="shell">
         <header className="top-bar">
           <div className="brand">
-            <span className="brand-mark" aria-hidden>
-              ●
-            </span>
+            <img
+              className="brand-mark"
+              src={`${import.meta.env.BASE_URL}app-icon.png`}
+              alt=""
+              aria-hidden
+            />
             <span className="brand-text">{t.title}</span>
           </div>
 
@@ -873,7 +876,13 @@ export default function App() {
             <span>{t.viewOnGitHub}</span>
           </a>
           <span className="footer-meta">
-            {status ? `${t.apiVersion} v${status.version}` : ''}
+            {status ? (
+              <>
+                {t.projectName}
+                <span className="footer-sep" aria-hidden="true">|</span>
+                {`${t.apiVersion} v${status.version}`}
+              </>
+            ) : ''}
             {status?.maintenance ? ` · ${t.maintenanceSuffix}` : ''}
           </span>
         </footer>

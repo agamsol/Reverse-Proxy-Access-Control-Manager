@@ -65,7 +65,8 @@ const en = {
   errLocationInclude:
     'Allow location sharing, or turn off “Include my location with this request”.',
   errGeoUnsupported: 'Location services are not available in this browser.',
-  apiVersion: 'Portal API',
+  projectName: 'Reverse-Proxy-Access-Control-Manager',
+  apiVersion: 'Public-API',
   maintenanceSuffix: 'Maintenance',
   viewOnGitHub: 'Source on GitHub',
   howItWorks: 'How it works',
