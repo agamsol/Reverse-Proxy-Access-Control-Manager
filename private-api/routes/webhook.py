@@ -13,7 +13,9 @@ from common_custom.utils.pydantic.webhook_models import (
     ModifyWebhookResponseModel
 )
 
-load_dotenv(".env")
+DATA_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "data"))
+
+load_dotenv(os.path.join(DATA_DIR, ".env"))
 
 mongodb_helper = MongoDb(
     database_name=os.getenv("MONGODB_DATABASE")

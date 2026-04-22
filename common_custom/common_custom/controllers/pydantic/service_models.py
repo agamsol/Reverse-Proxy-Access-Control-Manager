@@ -9,6 +9,11 @@ class ServiceResponseModel(BaseModel):
     internal_address: IPvAnyAddress = "127.0.0.1"
     port: int = 80
     protocol: Literal["http", "https"] = "http"
+    category: str | None = Field(
+        None,
+        max_length=200,
+        description="Optional group label for UI (e.g. in the public access request list).",
+    )
 
 
 class ServiceModel(ServiceResponseModel):

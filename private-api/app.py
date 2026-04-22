@@ -1,6 +1,7 @@
 import os
 import time
 import uvicorn
+from pathlib import Path
 from dotenv import load_dotenv
 from fastapi import FastAPI, Request, Depends
 from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
@@ -8,8 +9,11 @@ from routes import service, auth, pending, connection, webhook
 from models.auth_models import oauth2_token_scheme
 from common_custom.utils.pydantic.health_models import StatusResponseModel
 
-load_dotenv(".env")
-load_dotenv("private-api\\administrator.env")
+_HERE = Path(__file__).resolve().parent
+DATA_DIR = (_HERE.parent / "data").resolve()
+
+load_dotenv(DATA_DIR / ".env")
+load_dotenv(DATA_DIR / "private.env")
 
 SERVICE_VERSION = os.getenv("SERVICE_VERSION")
 SERVICE_UNDER_MAINTENANCE = os.getenv("SERVICE_UNDER_MAINTENANCE") == 'True'

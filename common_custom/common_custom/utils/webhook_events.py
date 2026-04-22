@@ -1,13 +1,16 @@
 import os
 import time
 import requests
+from pathlib import Path
 from datetime import datetime
 from dotenv import load_dotenv
 from common_custom.controllers.mongodb import MongoDb
 from common_custom.utils.pydantic.webhook_models import HTTPRequest, WebhookValidator
 from common_custom.controllers.pydantic.allowed_models import AllowedConnectionModel
 
-load_dotenv(".env")
+DATA_DIR = (Path(__file__).resolve().parents[3] / "data").resolve()
+
+load_dotenv(DATA_DIR / ".env")
 
 mongodb_helper = MongoDb(
     database_name=os.getenv("MONGODB_DATABASE")

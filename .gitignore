@@ -25,6 +25,9 @@ share/python-wheels/
 .installed.cfg
 *.egg
 MANIFEST
+# Shared config under data/ is versioned; keep local secrets out of git
+data/.env
+data/private.env
 
 # PyInstaller
 #  Usually these files are written by a python script from a template
@@ -137,7 +140,6 @@ celerybeat.pid
 # Environments
 .env
 .envrc
-administrator.env
 .venv
 env/
 venv/

@@ -1,4 +1,5 @@
 import os
+from pathlib import Path
 from dotenv import load_dotenv
 from fastapi import APIRouter, status
 from common_custom.utils.webhook_events import Events
@@ -7,7 +8,9 @@ from common_custom.controllers.validators import MongoID
 from common_custom.controllers.pydantic.allowed_models import AllowedConnectionModel, DeniedSuccessResponseModel
 from common_custom.controllers.pydantic.pending_models import PendingConnectionDatabaseModel, DenyConnectionRequestModel
 
-load_dotenv(".env")
+DATA_DIR = (Path(__file__).resolve().parents[2] / "data").resolve()
+
+load_dotenv(DATA_DIR / ".env")
 
 
 mongodb_helper = MongoDb(

@@ -1,4 +1,5 @@
 import os
+from pathlib import Path
 from datetime import datetime, timezone
 from dotenv import load_dotenv
 from common_custom.utils.webhook_events import Events
@@ -6,7 +7,10 @@ from fastapi import APIRouter, status
 from common_custom.controllers.mongodb import MongoDb
 from common_custom.controllers.validators import MongoID
 from common_custom.controllers.pydantic.allowed_models import AllowedConnectionModel, DeniedConnectionModel
-load_dotenv(".env")
+
+DATA_DIR = (Path(__file__).resolve().parents[2] / "data").resolve()
+
+load_dotenv(DATA_DIR / ".env")
 
 
 mongodb_helper = MongoDb(

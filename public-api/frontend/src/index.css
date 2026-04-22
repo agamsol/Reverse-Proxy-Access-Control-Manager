@@ -1,0 +1,67 @@
+:root {
+  color-scheme: light;
+  --bg: #f7f7f8;
+  --surface: #ffffff;
+  --text: #1a1a1c;
+  --muted: #5c5c66;
+  --border: #e2e2e6;
+  --accent: #2563eb;
+  --accent-muted: #1d4ed8;
+  --danger: #b91c1c;
+  --warn-bg: #fff7ed;
+  --warn-border: #fdba74;
+  --shadow: 0 1px 2px rgba(15, 23, 42, 0.06);
+  --radius: 10px;
+  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, Ubuntu, Cantarell, 'Noto Sans Hebrew',
+    'Noto Sans', sans-serif;
+  line-height: 1.5;
+  font-weight: 400;
+  color: var(--text);
+  background-color: var(--bg);
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+}
+
+[data-theme='dark'] {
+  color-scheme: dark;
+  --bg: #121214;
+  --surface: #1c1c21;
+  --text: #f4f4f5;
+  --muted: #a1a1aa;
+  --border: #2d2d35;
+  --accent: #60a5fa;
+  --accent-muted: #93c5fd;
+  --danger: #f87171;
+  --warn-bg: #2a1f14;
+  --warn-border: #9a3412;
+  --shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  height: 100%;
+  overflow: hidden;
+}
+
+body {
+  margin: 0;
+  height: 100%;
+  overflow: hidden;
+}
+
+#root {
+  height: 100%;
+  overflow: hidden;
+}
+
+button,
+input,
+textarea {
+  font: inherit;
+}

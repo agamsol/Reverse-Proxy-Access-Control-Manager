@@ -1,0 +1,5 @@
+{
+  "name": { "visible": true, "required": true },
+  "email": { "visible": false, "required": false },
+  "phone_number": { "visible": true, "required": true }
+}
