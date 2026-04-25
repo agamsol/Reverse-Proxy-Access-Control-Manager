@@ -78,10 +78,10 @@ class PollingAndProcessing:
             log.info(f"Connection change detected — {len(all_connections)} active connection(s)")
             previous_fetch_connections = all_connections
 
-            if not all_connections:
-                log.info("Connection list is now empty, skipping nginx update")
-                time.sleep(POLLING_INTERVAL)
-                continue
+            # if not all_connections:
+            #     log.info("Connection list is now empty, skipping nginx update")
+            #     time.sleep(POLLING_INTERVAL)
+            #     continue
 
             path = Nginx.address_whitelist_config_generator(
                 nginx_path=self.nginx_path,
