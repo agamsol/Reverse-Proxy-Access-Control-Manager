@@ -32,10 +32,15 @@ import { PendingView } from './views/Pending'
 import { ConnectionsView } from './views/Connections'
 import { IgnoredView } from './views/Ignored'
 import { WebhooksView } from './views/Webhooks'
+import {
+  playNewPendingConnectionSound,
+  primePendingNotificationSound,
+  resetPendingNotificationSound,
+} from './pending-sound'
 import './App.css'
 
 const GITHUB_URL = 'https://github.com/agamsol/Reverse-Proxy-Access-Control-Manager'
-const PENDING_POLL_MS = 30_000
+const PENDING_POLL_MS = 2_000
 
 type Tab = 'services' | 'pending' | 'connections' | 'ignored' | 'webhooks'
 
@@ -109,6 +114,9 @@ export default function App() {
 
   const [activeTab, setActiveTab] = useState<Tab>('pending')
   const [pendingCount, setPendingCount] = useState<number | null>(null)
+  /** First pending sample after mount/login: establish baseline, do not play sound. */
+  const pendingSoundGateRef = useRef(true)
+  const lastPendingCountForSoundRef = useRef<number | null>(null)
   const isNarrow = useNarrowSidebar()
   const [sidebarOpen, setSidebarOpen] = useState(false)
 
@@ -167,13 +175,48 @@ export default function App() {
     }
   }, [t.errLoadFailed])
 
+  useEffect(() => {
+    if (!token) {
+      pendingSoundGateRef.current = true
+      lastPendingCountForSoundRef.current = null
+      resetPendingNotificationSound()
+    }
+  }, [token])
+
+  /* After reload with a stored session, unlock audio on first click/key (autoplay policy). */
+  useEffect(() => {
+    if (!token) return
+    const onFirstInteract = () => {
+      primePendingNotificationSound()
+      window.removeEventListener('pointerdown', onFirstInteract, true)
+      window.removeEventListener('keydown', onFirstInteract, true)
+    }
+    window.addEventListener('pointerdown', onFirstInteract, true)
+    window.addEventListener('keydown', onFirstInteract, true)
+    return () => {
+      window.removeEventListener('pointerdown', onFirstInteract, true)
+      window.removeEventListener('keydown', onFirstInteract, true)
+    }
+  }, [token])
+
   // Poll pending requests so the sidebar badge stays current even when the
   // Pending tab isn't active.
   const refreshPendingCount = useCallback(async () => {
     if (!token) return
     try {
       const list = await listPending()
-      setPendingCount(list.length)
+      const n = list.length
+      setPendingCount(n)
+      if (pendingSoundGateRef.current) {
+        pendingSoundGateRef.current = false
+        lastPendingCountForSoundRef.current = n
+        return
+      }
+      const prev = lastPendingCountForSoundRef.current
+      lastPendingCountForSoundRef.current = n
+      if (prev !== null && n > prev) {
+        playNewPendingConnectionSound()
+      }
     } catch {
       // Silently ignore — the Pending view surfaces errors when it's opened.
     }

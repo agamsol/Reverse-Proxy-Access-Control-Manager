@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from 'react'
 import { HttpError, login } from '../api'
 import { setToken } from '../auth'
+import { primePendingNotificationSound } from '../pending-sound'
 import { EyeIcon, EyeOffIcon, UserIcon } from '../icons'
 import type { Messages } from '../i18n'
 
@@ -19,6 +20,7 @@ export function LoginView({ t, onSuccess }: LoginProps) {
 
   const onSubmit = async (e: FormEvent) => {
     e.preventDefault()
+    primePendingNotificationSound()
     setError(null)
     setSubmitting(true)
     try {

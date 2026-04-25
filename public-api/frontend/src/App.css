@@ -44,9 +44,12 @@
   width: 1.35rem;
   height: 1.35rem;
   border-radius: 22.37%;
-  object-fit: cover;
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
   display: block;
   flex: none;
+  user-select: none;
 }
 
 .brand-text {
@@ -125,6 +128,23 @@
   flex-direction: column;
   align-items: center;
   gap: 0.85rem;
+}
+
+/* App Store–style icon mask (CSS approx. of the iOS squircle) */
+.hero-app-icon {
+  width: clamp(5.75rem, 32vw, 9.5rem);
+  height: auto;
+  aspect-ratio: 1;
+  border-radius: 22.37%;
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  display: block;
+  flex-shrink: 0;
+  user-select: none;
+  box-shadow:
+    0 18px 48px -16px color-mix(in srgb, var(--text) 28%, transparent),
+    0 0 0 1px color-mix(in srgb, var(--border) 70%, transparent);
 }
 
 .hero-badge {

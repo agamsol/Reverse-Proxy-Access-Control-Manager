@@ -4,6 +4,7 @@ import {
   useMemo,
   useRef,
   useState,
+  type CSSProperties,
   type FormEvent,
   type ReactNode,
 } from 'react'
@@ -25,6 +26,11 @@ import {
 } from './api'
 import { strings, type Lang } from './i18n'
 import './App.css'
+
+/** Background (not <img>) so the asset cannot be dragged to a new tab. */
+const APP_ICON_BACKGROUND: CSSProperties = {
+  backgroundImage: `url("${import.meta.env.BASE_URL}app-icon.png")`,
+}
 
 const THEME_KEY = 'guest-portal-theme'
 const LANG_KEY = 'guest-portal-lang'
@@ -750,10 +756,9 @@ export default function App() {
       <div className="shell">
         <header className="top-bar">
           <div className="brand">
-            <img
+            <div
               className="brand-mark"
-              src={`${import.meta.env.BASE_URL}app-icon.png`}
-              alt=""
+              style={APP_ICON_BACKGROUND}
               aria-hidden
             />
             <span className="brand-text">{t.title}</span>
@@ -791,6 +796,11 @@ export default function App() {
 
         <main className="hero">
           <div className="hero-inner">
+            <div
+              className="hero-app-icon"
+              style={APP_ICON_BACKGROUND}
+              aria-hidden
+            />
             <span className="hero-badge">{t.subtitleRedirect}</span>
             <h1 className="hero-title">{t.title}</h1>
             <p className="hero-lede">{t.heroLede}</p>
