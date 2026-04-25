@@ -26,20 +26,31 @@ class PollingAndProcessing:
 
         try:
             all_services = self.private_api.get_service_list()
+
             log.debug(f"Fetched {len(all_services)} service(s)")
+
             return all_services
+
         except Exception as e:
+
             log.error(f"Failed to fetch services: {e}")
+
             return None
 
     def _fetch_all_connections(self, all_services: list[dict]) -> list[dict] | None:
 
         try:
+
             all_connections = self.private_api.get_connection_list(all_services=all_services)
+
             log.debug(f"Fetched {len(all_connections)} valid connection(s)")
+
             return all_connections
+
         except Exception as e:
+
             log.error(f"Failed to fetch connections: {e}")
+
             return None
 
     def poll_and_process(self) -> None:
@@ -54,16 +65,20 @@ class PollingAndProcessing:
             all_services = self._fetch_all_services()
 
             if all_services is None:
+
                 log.warning("Skipping cycle — could not fetch services")
                 had_failure = True
+
                 time.sleep(POLLING_INTERVAL)
                 continue
 
             all_connections = self._fetch_all_connections(all_services)
 
             if all_connections is None:
+
                 log.warning("Skipping cycle — could not fetch connections")
                 had_failure = True
+
                 time.sleep(POLLING_INTERVAL)
                 continue
 
