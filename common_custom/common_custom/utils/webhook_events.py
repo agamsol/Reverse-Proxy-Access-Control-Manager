@@ -1,8 +1,6 @@
 import os
 import time
-import requests
 from pathlib import Path
-from datetime import datetime
 from dotenv import load_dotenv
 from common_custom.controllers.mongodb import MongoDb
 from common_custom.utils.pydantic.webhook_models import HTTPRequest, WebhookValidator
@@ -36,10 +34,10 @@ class Events:
 
         if isinstance(email, dict):
             email = next(iter(email), None)
-        
+
         if isinstance(phone_number, dict):
             phone_number = next(iter(phone_number), None)
-        
+
         context = {
             "owner_name": os.getenv("OWNER_NAME", "Unknown"),
             "owner_email": os.getenv("OWNER_EMAIL", None),
@@ -59,7 +57,7 @@ class Events:
 
     @staticmethod
     async def pending_new(access_request, remote_address: str, service):
-        
+
         webhook_available = await mongodb_helper.get_webhook(event="pending.new")
 
         if webhook_available:
@@ -71,7 +69,7 @@ class Events:
             # Available message variables: {{ip_address}}, {{service}}, {{note}}, {{date}}, {{time}} {{time_seconds}}, {{nl}}
 
             context = await Events.default_context(access_request.contact_methods.name, access_request.contact_methods.phone_number, access_request.contact_methods.email)
-            
+
             additional_context = {
                 "ip_address": remote_address,
                 "service": service.name,

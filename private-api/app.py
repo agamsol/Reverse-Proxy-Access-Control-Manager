@@ -62,22 +62,22 @@ app.include_router(
 
 app.include_router(
     router=service.router,
-    dependencies=[Depends(oauth2_token_scheme)]  # Alternativly: Annotated[str, Depends(oauth2_token_scheme)]
+    dependencies=[Depends(oauth2_token_scheme)]
 )
 
 app.include_router(
     router=pending.router,
-    dependencies=[Depends(oauth2_token_scheme)]  # Alternativly: Annotated[str, Depends(oauth2_token_scheme)]
+    dependencies=[Depends(oauth2_token_scheme)]
 )
 
 app.include_router(
     router=connection.router,
-    dependencies=[Depends(oauth2_token_scheme)]  # Alternativly: Annotated[str, Depends(oauth2_token_scheme)]
+    dependencies=[Depends(oauth2_token_scheme)]
 )
 
 app.include_router(
     router=webhook.router,
-    dependencies=[Depends(oauth2_token_scheme)]  # Alternativly: Annotated[str, Depends(oauth2_token_scheme)]
+    dependencies=[Depends(oauth2_token_scheme)]
 )
 
 STATIC_ROOT = (_HERE / "frontend" / "dist").resolve()
@@ -133,6 +133,7 @@ async def admin_portal_static(full_path: str):
 # Access Management (Currently Allowed)
 # - ✅ Revoke Access
 # - ✅ List
+# - ✅ Create allowed (admin grant, no pending / no webhook)
 # Notifications Webhook Route
 # - Add Request
 

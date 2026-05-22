@@ -62,6 +62,13 @@ const en = {
   errDuration:
     'The access end time must be in the future. Clear the field or pick a later date and time.',
   errRequiredContact: 'Please fill in the required contact fields: {fields}.',
+  errRevokedAccess:
+    'Access for your address to these services was revoked and new requests are blocked until an administrator restores access: {services}.',
+  ignoreBlockModalTitle: 'Request blocked',
+  ignoreBlockModalLede:
+    'Access requests from this network address have been restricted. Please contact your system administrator to restore access.',
+  ignoreBlockModalListHeading: 'Services you cannot request right now',
+  ignoreBlockModalButton: 'Got it',
   errLocationInclude:
     'Allow location sharing, or turn off “Include my location with this request”.',
   errGeoUnsupported: 'Location services are not available in this browser.',

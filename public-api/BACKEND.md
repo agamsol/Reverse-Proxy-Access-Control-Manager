@@ -117,6 +117,30 @@ Submit a request for access to one or more services. For each requested service 
 **Errors:**
 
 - `400 Bad Request` — No requested service names matched services in the database (`"No valid services were requested."`).
+- `403 Forbidden` — The client IP may not submit a pending request for one or more requested services. The `detail` object always includes `code`, `services` (affected catalog names), and `message`:
+
+    **`connection_ignored`** — An administrator denied a prior request with “also block this IP” for that service (MongoDB `ignored_collection`). The block is removed when an administrator un-ignores the address from the private admin UI.
+
+    ```json
+    {
+      "code": "connection_ignored",
+      "services": ["service-a"],
+      "message": "This network address was blocked from submitting access requests for the following service(s). An administrator must remove the block before you can request access again."
+    }
+    ```
+
+    **`connection_revoked`** — Access was **revoked** for that IP + service (`revoked_connections`). The block is removed when an administrator grants access again (accept pending or admin grant).
+
+    ```json
+    {
+      "code": "connection_revoked",
+      "services": ["service-a", "service-b"],
+      "message": "Access for your network address to the following service(s) was revoked by an administrator. You cannot submit a new access request until access is granted again."
+    }
+    ```
+
+    If both conditions apply to different services in the same request, **`connection_ignored` is returned first** (only the ignored subset appears in `services`).
+
 - `422 Unprocessable Entity` — One or more contact fields that are `visible` and `required` in `data/contact-fields.json` are missing or empty. The `detail` payload is:
 
     ```json
@@ -129,6 +153,8 @@ Submit a request for access to one or more services. For each requested service 
 **Side Effects:**
 
 - For each valid service in `services`, creates a pending connection (MongoDB) and may invoke the `pending.new` webhook if configured.
+- **`403` pre-checks:** requests are rejected when the client IP + service matches an **ignored** row (`ignored_collection`, from “deny and block IP”) or a **revoked** row (`revoked_connections`, from revoking an allowed connection). IP matching treats `127.0.0.1` and `::ffff:127.0.0.1` as the same client where applicable.
+- When an administrator **revokes** an allowed connection, the server records that **IP + service** pair in MongoDB (`revoked_connections`). While that record exists, `POST /request-access` returns **403** with `code: connection_revoked` for that pair. The block is removed when access is granted again (pending accept or admin grant).
 
 ---
 

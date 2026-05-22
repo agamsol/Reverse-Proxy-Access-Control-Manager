@@ -8,11 +8,25 @@ from common_custom.controllers.validators import MongoID
 from common_custom.controllers.pydantic.pending_models import (
     PendingConnectionDatabaseModel,
     ContactMethodsModel,
-    LocationRequestModel
+    LocationRequestModel,
+    AcceptPendingConnectionRequestModel,
 )
 from common_custom.controllers.pydantic.service_models import ServiceResponseModel
 from common_custom.controllers.pydantic.allowed_models import AllowedConnectionModel, DeniedConnectionModel
 from common_custom.utils.pydantic.webhook_models import HTTPRequest
+
+
+def _client_ip_query_variants(ip_str: str) -> list[str]:
+    """Match Mongo `ip_address` whether stored as e.g. `127.0.0.1` or `::ffff:127.0.0.1`."""
+    s = (ip_str or "").strip()
+    if not s:
+        return []
+    variants = [s]
+    if s.lower().startswith("::ffff:"):
+        tail = s[7:]
+        if tail and tail not in variants:
+            variants.append(tail)
+    return variants
 
 
 # # Collections to be used (add, remove, get, list)
@@ -38,6 +52,7 @@ class MongoDb:
         self.allowed_collection_name = "allowed_connections"
         self.ignored_collection_name = "ignored_collection"
         self.webhooks_collection_name = "webhooks"
+        self.revoked_collection_name = "revoked_connections"
 
     def connect(
         self,
@@ -114,6 +129,53 @@ class MongoDb:
         available_services = cursor.to_list(length=None)
 
         return available_services
+
+    def _record_connection_revoked(self, deleted_allowed_document: dict | None) -> None:
+        """Persist (ip, service) so the public guest API can refuse new pending requests until an admin grants again."""
+        if not deleted_allowed_document:
+            return
+        ip_str = str(deleted_allowed_document.get("ip_address") or "")
+        service_name = deleted_allowed_document.get("service_name")
+        if not ip_str or not service_name:
+            return
+        now = datetime.now(timezone.utc)
+        self.database[self.revoked_collection_name].update_one(
+            {"ip_address": ip_str, "service_name": service_name},
+            {
+                "$set": {
+                    "ip_address": ip_str,
+                    "service_name": service_name,
+                    "revoked_at": now,
+                }
+            },
+            upsert=True,
+        )
+
+    def _clear_revocation_block(self, ip_str: str, service_name: str) -> None:
+        if not ip_str or not service_name:
+            return
+        self.database[self.revoked_collection_name].delete_many(
+            {"ip_address": ip_str, "service_name": service_name}
+        )
+
+    async def is_connection_revoked_for_service(self, ip_str: str, service_name: str) -> bool:
+        ips = _client_ip_query_variants(ip_str)
+        if not ips or not service_name:
+            return False
+        doc = self.database[self.revoked_collection_name].find_one(
+            {"ip_address": {"$in": ips}, "service_name": service_name}
+        )
+        return doc is not None
+
+    async def is_connection_ignored_for_service(self, ip_str: str, service_name: str) -> bool:
+        """True when an admin denied a pending request with "also block this IP" for this service."""
+        ips = _client_ip_query_variants(ip_str)
+        if not ips or not service_name:
+            return False
+        doc = self.database[self.ignored_collection_name].find_one(
+            {"ip_address": {"$in": ips}, "service_name": service_name}
+        )
+        return doc is not None
 
     async def get_service(self, service_name: str):
 
@@ -197,7 +259,22 @@ class MongoDb:
 
         return pending_connection_document
 
-    async def accept_pending_connection(self, connection_id: MongoID):
+    async def _raise_if_active_allowed_duplicate(self, ip_str: str, service_name: str) -> None:
+        allowed_collection = self.database[self.allowed_collection_name]
+        now = datetime.now(timezone.utc).replace(tzinfo=None)
+        for conn in allowed_collection.find({"ip_address": ip_str, "service_name": service_name}):
+            exp = conn.get("ExpireAt")
+            if exp is None or exp > now:
+                raise HTTPException(
+                    status_code=409,
+                    detail="An active allowed connection already exists for this IP and service.",
+                )
+
+    async def accept_pending_connection(
+        self,
+        connection_id: MongoID,
+        overrides: AcceptPendingConnectionRequestModel | None = None,
+    ):
 
         pending_collection = self.database[self.pending_collection_name]
         allowed_collection = self.database[self.allowed_collection_name]
@@ -208,25 +285,115 @@ class MongoDb:
             filter={"_id": ObjectId(connection_id)}
         )
 
-        requested_service: dict = pending_connection_payload.get("service")
+        requested_service: dict = pending_connection_payload.get("service") or {}
+        ip_str = str(pending_connection_payload.get("ip_address"))
 
-        if requested_service.get("expiry"):
-            connection_expiry = datetime.now(timezone.utc) + timedelta(minutes=requested_service.get("expiry"))
+        if overrides is not None and overrides.explicit:
+            service_name = overrides.service_name
+            if not service_name:
+                raise HTTPException(
+                    status_code=400,
+                    detail="service_name is required when explicit is true",
+                )
+            if not await self.get_service(service_name):
+                raise HTTPException(
+                    status_code=404,
+                    detail="The specified service does not exist",
+                )
+            await self._raise_if_active_allowed_duplicate(ip_str, service_name)
+            contact_methods = overrides.to_contact_methods()
+            if overrides.expiry_mode == "inherit":
+                if requested_service.get("expiry"):
+                    connection_expiry = datetime.now(timezone.utc) + timedelta(
+                        minutes=requested_service.get("expiry")
+                    )
+                else:
+                    connection_expiry = None
+            elif overrides.expiry_mode == "none":
+                connection_expiry = None
+            else:
+                at = overrides.expire_at
+                if at is None:
+                    raise HTTPException(
+                        status_code=400,
+                        detail="expire_at is required when expiry_mode is at",
+                    )
+                if at.tzinfo is None:
+                    connection_expiry = at.replace(tzinfo=timezone.utc)
+                else:
+                    connection_expiry = at.astimezone(timezone.utc)
         else:
-            connection_expiry = None
+            service_name = requested_service.get("name")
+            if requested_service.get("expiry"):
+                connection_expiry = datetime.now(timezone.utc) + timedelta(
+                    minutes=requested_service.get("expiry")
+                )
+            else:
+                connection_expiry = None
+            contact_methods = pending_connection_payload.get("contact_methods")
+            if service_name:
+                await self._raise_if_active_allowed_duplicate(ip_str, service_name)
 
         allowed_connection_payload = AllowedConnectionModel(
-            contact_methods=pending_connection_payload.get("contact_methods"),
+            contact_methods=contact_methods,
             ip_address=pending_connection_payload.get("ip_address"),
-            service_name=requested_service.get("name"),
-            ExpireAt=connection_expiry
+            service_name=service_name,
+            ExpireAt=connection_expiry,
         )
 
         doc = allowed_connection_payload.model_dump(exclude={"id"})
         doc["ip_address"] = str(doc["ip_address"])
         allowed_collection.insert_one(doc)
 
+        self._clear_revocation_block(ip_str, service_name)
+
         return allowed_connection_payload
+
+    async def create_allowed_connection_admin(
+        self,
+        *,
+        ip_address,
+        service_name: str,
+        contact_methods: ContactMethodsModel,
+        expiry_minutes: int | None,
+        expire_at: datetime | None = None,
+    ) -> AllowedConnectionModel:
+
+        if not await self.get_service(service_name):
+            raise HTTPException(
+                status_code=404,
+                detail="The specified service does not exist",
+            )
+
+        allowed_collection = self.database[self.allowed_collection_name]
+        ip_str = str(ip_address)
+
+        await self._raise_if_active_allowed_duplicate(ip_str, service_name)
+
+        if expire_at is not None:
+            at = expire_at
+            if at.tzinfo is None:
+                connection_expiry = at.replace(tzinfo=timezone.utc)
+            else:
+                connection_expiry = at.astimezone(timezone.utc)
+        elif expiry_minutes is not None:
+            connection_expiry = datetime.now(timezone.utc) + timedelta(minutes=expiry_minutes)
+        else:
+            connection_expiry = None
+
+        allowed_connection_payload = AllowedConnectionModel(
+            contact_methods=contact_methods,
+            ip_address=ip_address,
+            service_name=service_name,
+            ExpireAt=connection_expiry,
+        )
+
+        doc = allowed_connection_payload.model_dump(exclude={"id"}, mode="json")
+        doc["ip_address"] = str(doc["ip_address"])
+        result = allowed_collection.insert_one(doc)
+        inserted = allowed_collection.find_one({"_id": result.inserted_id})
+        self._clear_revocation_block(ip_str, service_name)
+        return AllowedConnectionModel.model_validate(inserted)
 
     async def deny_pending_connection(self, connection_id: MongoID, ignore_connection=False):
 
@@ -258,6 +425,8 @@ class MongoDb:
         deleted_document: dict = self.database[self.allowed_collection_name].find_one_and_delete(
             filter={"_id": ObjectId(connection_id)}
         )
+
+        self._record_connection_revoked(deleted_document)
 
         return deleted_document
 

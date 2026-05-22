@@ -18,6 +18,7 @@ import {
   getContactFieldsConfig,
   getServices,
   getStatus,
+  HttpError,
   submitAccessRequest,
   type AccessCheckResponse,
   type ContactFieldsConfig,
@@ -35,6 +36,9 @@ const APP_ICON_BACKGROUND: CSSProperties = {
 const THEME_KEY = 'guest-portal-theme'
 const LANG_KEY = 'guest-portal-lang'
 const GITHUB_URL = 'https://github.com/agamsol/Reverse-Proxy-Access-Control-Manager'
+
+/** After `connection_ignored`, close the request modal first; open the block modal after this delay (ms). */
+const IGNORE_BLOCK_MODAL_DELAY_MS = 200
 
 type GeoStatus = 'idle' | 'prompting' | 'ok' | 'denied'
 type ModalKind = null | 'how' | 'request' | 'success'
@@ -197,8 +201,18 @@ function parseRedirectTarget(): URL | null {
   }
 }
 
-function normalizeHost(value: string): string {
-  return value.trim().toLowerCase().replace(/^https?:\/\//, '').replace(/\/.*$/, '').replace(/:\d+$/, '')
+/** Stable id for UI/selection; backend should always send `name` but bad DB rows must not white-screen the app. */
+function serviceIdentity(s: ServiceInfo): string {
+  const n = s.name
+  if (typeof n === 'string' && n.trim() !== '') return n.trim()
+  const fallback = s.internal_address != null ? String(s.internal_address).trim() : ''
+  return fallback || '__unnamed_service__'
+}
+
+function normalizeHost(value: unknown): string {
+  if (value == null) return ''
+  const s = typeof value === 'string' ? value : String(value)
+  return s.trim().toLowerCase().replace(/^https?:\/\//, '').replace(/\/.*$/, '').replace(/:\d+$/, '')
 }
 
 function findMatchingService(services: ServiceInfo[], target: URL): ServiceInfo | null {
@@ -206,7 +220,6 @@ function findMatchingService(services: ServiceInfo[], target: URL): ServiceInfo 
   for (const s of services) {
     const candidates = [s.name, s.internal_address]
     for (const c of candidates) {
-      if (!c) continue
       const n = normalizeHost(c)
       if (!n) continue
       if (n === host) return s
@@ -225,7 +238,7 @@ function serviceCategoryKey(s: ServiceInfo): string {
 function serviceMatchesQuery(s: ServiceInfo, q: string): boolean {
   const n = q.trim().toLowerCase()
   if (!n) return true
-  if (s.name.toLowerCase().includes(n)) return true
+  if ((s.name ?? '').toLowerCase().includes(n)) return true
   if (s.description?.toLowerCase().includes(n)) return true
   if (String(s.internal_address).toLowerCase().includes(n)) return true
   if (s.category?.toLowerCase().includes(n)) return true
@@ -234,10 +247,12 @@ function serviceMatchesQuery(s: ServiceInfo, q: string): boolean {
 
 function sortServicesWithSelectedFirst(list: ServiceInfo[], selected: Set<string>): ServiceInfo[] {
   return [...list].sort((a, b) => {
-    const aOn = selected.has(a.name)
-    const bOn = selected.has(b.name)
+    const idA = serviceIdentity(a)
+    const idB = serviceIdentity(b)
+    const aOn = selected.has(idA)
+    const bOn = selected.has(idB)
     if (aOn !== bOn) return aOn ? -1 : 1
-    return a.name.localeCompare(b.name, undefined, { sensitivity: 'base' })
+    return idA.localeCompare(idB, undefined, { sensitivity: 'base' })
   })
 }
 
@@ -258,12 +273,60 @@ function groupServicesByCategory(list: ServiceInfo[]): { key: string; services: 
   return keys.map((key) => ({ key, services: m.get(key)! }))
 }
 
+function IgnoreBlockIcon({ size = 22 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden>
+      <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="1.75" />
+      <path
+        d="M7.5 7.5l9 9"
+        stroke="currentColor"
+        strokeWidth="1.75"
+        strokeLinecap="round"
+      />
+    </svg>
+  )
+}
+
+function BlockedServicesNotice({
+  serviceNames,
+  catalog,
+  listLabel,
+}: {
+  serviceNames: string[]
+  catalog: ServiceInfo[] | null
+  listLabel: string
+}) {
+  return (
+    <div className="ignore-block-body">
+      <p className="ignore-block-list-label">{listLabel}</p>
+      <ul className="blocked-services-list" aria-label={listLabel}>
+        {serviceNames.map((name) => {
+          const row = catalog?.find((s) => serviceIdentity(s) === name || s.name === name)
+          const title = row?.name?.trim() ? row.name.trim() : name
+          return (
+            <li key={name} className="blocked-services-item">
+              <span className="blocked-services-name">{title}</span>
+              {row?.description ? (
+                <span className="blocked-services-desc">{row.description}</span>
+              ) : null}
+            </li>
+          )
+        })}
+      </ul>
+    </div>
+  )
+}
+
 type ModalProps = {
   open: boolean
   onClose: () => void
   title: string
   labelClose: string
-  size?: 'md' | 'lg'
+  size?: 'sm' | 'md' | 'lg'
+  /** Higher z-index when stacked above another dialog. */
+  stack?: 'default' | 'nested'
+  /** When false, Escape does not call onClose (e.g. a nested dialog handles it). */
+  closeOnEscape?: boolean
   children: ReactNode
   footer?: ReactNode
 }
@@ -304,20 +367,36 @@ function FieldRequirementMark({
   return <OptionalMark label={optionalLabel} />
 }
 
-function Modal({ open, onClose, title, labelClose, size = 'md', children, footer }: ModalProps) {
+function Modal({
+  open,
+  onClose,
+  title,
+  labelClose,
+  size = 'md',
+  stack = 'default',
+  closeOnEscape = true,
+  children,
+  footer,
+}: ModalProps) {
   useEffect(() => {
-    if (!open) return
+    if (!open || !closeOnEscape) return
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onClose()
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [open, onClose])
+  }, [open, onClose, closeOnEscape])
 
   if (!open) return null
 
   return (
-    <div className="modal-overlay" onMouseDown={onClose} role="presentation">
+    <div
+      className={
+        stack === 'nested' ? 'modal-overlay modal-overlay--nested' : 'modal-overlay'
+      }
+      onMouseDown={onClose}
+      role="presentation"
+    >
       <div
         className={`modal modal--${size}`}
         role="dialog"
@@ -375,6 +454,8 @@ export default function App() {
   /** After explicit detach, skip auto `getCurrentPosition` while permission is still granted. */
   const skipAutoLocationAfterDetachRef = useRef(false)
   const wasRequestModalRef = useRef(false)
+  /** Opens ignore-block modal after request modal unmount. */
+  const ignoredBlockOpenTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const isSecureContext = useMemo(() => {
     if (typeof window === 'undefined') return true
@@ -388,6 +469,8 @@ export default function App() {
 
   const [submitting, setSubmitting] = useState(false)
   const [formError, setFormError] = useState<string | null>(null)
+  /** `connection_ignored`: service ids blocked for this client (own modal after request dialog closes). */
+  const [ignoredBlockServices, setIgnoredBlockServices] = useState<string[] | null>(null)
 
   const [serviceQuery, setServiceQuery] = useState('')
   const [collapsedCategories, setCollapsedCategories] = useState<Set<string>>(() => new Set())
@@ -402,6 +485,15 @@ export default function App() {
   useEffect(() => {
     document.title = t.title
   }, [t.title])
+
+  useEffect(() => {
+    return () => {
+      if (ignoredBlockOpenTimerRef.current != null) {
+        clearTimeout(ignoredBlockOpenTimerRef.current)
+        ignoredBlockOpenTimerRef.current = null
+      }
+    }
+  }, [])
 
   useEffect(() => {
     if (modal !== 'request') {
@@ -447,10 +539,13 @@ export default function App() {
     const match = findMatchingService(services, redirectTarget)
     if (!match) return
     autoSelectedRef.current = true
+    const id = serviceIdentity(match)
+    if (!id || id === '__unnamed_service__') return
+    autoSelectedRef.current = true
     setSelected((prev) => {
-      if (prev.has(match.name)) return prev
+      if (prev.has(id)) return prev
       const next = new Set(prev)
-      next.add(match.name)
+      next.add(id)
       return next
     })
   }, [services, redirectTarget])
@@ -583,6 +678,15 @@ export default function App() {
     }
   }, [geoStatus, detachLocation, requestLocation])
 
+  const dismissRequestModal = useCallback(() => {
+    if (ignoredBlockOpenTimerRef.current != null) {
+      clearTimeout(ignoredBlockOpenTimerRef.current)
+      ignoredBlockOpenTimerRef.current = null
+    }
+    setIgnoredBlockServices(null)
+    setModal(null)
+  }, [])
+
   useEffect(() => {
     if (modal === 'request' && !wasRequestModalRef.current) {
       skipAutoLocationAfterDetachRef.current = false
@@ -682,11 +786,33 @@ export default function App() {
     setSubmitting(true)
     try {
       const res = await submitAccessRequest(payload)
+      if (ignoredBlockOpenTimerRef.current != null) {
+        clearTimeout(ignoredBlockOpenTimerRef.current)
+        ignoredBlockOpenTimerRef.current = null
+      }
       lastSuccessRef.current = res.data.message
       resetForm()
+      setIgnoredBlockServices(null)
       setModal('success')
     } catch (err) {
-      setFormError(err instanceof Error ? err.message : 'Request failed.')
+      if (err instanceof HttpError && err.requestAccessBlock?.code === 'connection_ignored') {
+        setFormError(null)
+        const blocked = [...err.requestAccessBlock.services]
+        if (ignoredBlockOpenTimerRef.current != null) {
+          clearTimeout(ignoredBlockOpenTimerRef.current)
+        }
+        setModal(null)
+        ignoredBlockOpenTimerRef.current = window.setTimeout(() => {
+          ignoredBlockOpenTimerRef.current = null
+          setIgnoredBlockServices(blocked)
+        }, IGNORE_BLOCK_MODAL_DELAY_MS)
+      } else if (err instanceof HttpError && err.requestAccessBlock?.code === 'connection_revoked') {
+        setFormError(
+          t.errRevokedAccess.replace('{services}', err.requestAccessBlock.services.join(', ')),
+        )
+      } else {
+        setFormError(err instanceof Error ? err.message : 'Request failed.')
+      }
     } finally {
       setSubmitting(false)
     }
@@ -825,7 +951,13 @@ export default function App() {
               <button
                 type="button"
                 className="btn btn--primary btn--lg"
-                onClick={() => setModal('request')}
+                onClick={() => {
+                  if (ignoredBlockOpenTimerRef.current != null) {
+                    clearTimeout(ignoredBlockOpenTimerRef.current)
+                    ignoredBlockOpenTimerRef.current = null
+                  }
+                  setModal('request')
+                }}
                 disabled={ctaDisabled}
               >
                 {t.ctaRequest}
@@ -938,7 +1070,7 @@ export default function App() {
       <Modal
         open={modal === 'request'}
         onClose={() => {
-          if (!submitting) setModal(null)
+          if (!submitting) dismissRequestModal()
         }}
         title={t.requestAccess}
         labelClose={t.close}
@@ -977,7 +1109,7 @@ export default function App() {
               <button
                 type="button"
                 className="btn btn--quiet"
-                onClick={() => setModal(null)}
+                onClick={dismissRequestModal}
                 disabled={submitting}
               >
                 {t.cancel}
@@ -1182,22 +1314,23 @@ export default function App() {
                     ? `${t.categorySectionExpand} — ${label}`
                     : `${t.categorySectionCollapse} — ${label}`
                   const renderRows = () =>
-                    sortServicesWithSelectedFirst(catServices, selected).map((s) => {
-                      const isOn = selected.has(s.name)
+                    sortServicesWithSelectedFirst(catServices, selected).map((s, idx) => {
+                      const sid = serviceIdentity(s)
+                      const isOn = selected.has(sid)
                       return (
                         <label
-                          key={s.name}
+                          key={`${sid}-${idx}`}
                           className={`service-row ${isOn ? 'is-on' : ''}`}
                         >
                           <input
                             type="checkbox"
                             checked={isOn}
-                            onChange={() => toggleService(s.name)}
+                            onChange={() => toggleService(sid)}
                           />
                           <span className="service-row-indicator" aria-hidden />
                           <span className="service-row-text">
                             <span className="service-row-main">
-                              <span className="service-row-title">{s.name}</span>
+                              <span className="service-row-title">{s.name?.trim() ? s.name : sid}</span>
                               {s.description ? (
                                 <span className="service-row-sub">{s.description}</span>
                               ) : null}
@@ -1323,6 +1456,37 @@ export default function App() {
           ) : null}
         </form>
       </Modal>
+
+      {ignoredBlockServices ? (
+        <Modal
+          open
+          size="sm"
+          onClose={() => setIgnoredBlockServices(null)}
+          title={t.ignoreBlockModalTitle}
+          labelClose={t.close}
+          footer={
+            <button
+              type="button"
+              className="btn btn--primary"
+              onClick={() => setIgnoredBlockServices(null)}
+            >
+              {t.ignoreBlockModalButton}
+            </button>
+          }
+        >
+          <div className="ignore-block-intro">
+            <div className="ignore-block-icon-wrap" aria-hidden>
+              <IgnoreBlockIcon />
+            </div>
+            <p className="ignore-block-lede">{t.ignoreBlockModalLede}</p>
+          </div>
+          <BlockedServicesNotice
+            serviceNames={ignoredBlockServices}
+            catalog={services}
+            listLabel={t.ignoreBlockModalListHeading}
+          />
+        </Modal>
+      ) : null}
 
       <Modal
         open={modal === 'success'}

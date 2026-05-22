@@ -361,7 +361,6 @@ export default function App() {
                     <button
                       key={tab}
                       type="button"
-                      data-tab={tab}
                       className={'sidebar-link ' + (activeTab === tab ? 'is-active' : '')}
                       onClick={() => {
                         setActiveTab(tab)

@@ -44,18 +44,46 @@ export type RequestAccessResponse = {
   message: string
 }
 
+export type RequestAccessBlock = {
+  code: 'connection_ignored' | 'connection_revoked'
+  services: string[]
+}
+
 function parseErrorDetail(raw: unknown): string {
   if (typeof raw === 'string') return raw
   if (raw && typeof raw === 'object' && 'detail' in raw) {
     const d = (raw as { detail: unknown }).detail
     if (typeof d === 'string') return d
+    if (d && typeof d === 'object' && !Array.isArray(d) && 'message' in d) {
+      const m = (d as { message: unknown }).message
+      if (typeof m === 'string') return m
+    }
     if (Array.isArray(d)) {
       return d
-        .map((e) => (typeof e === 'object' && e && 'msg' in e ? String((e as { msg: unknown }).msg) : String(e)))
+        .map((e) =>
+          typeof e === 'object' && e && 'msg' in e ? String((e as { msg: unknown }).msg) : String(e),
+        )
         .join(' ')
     }
   }
   return 'Request failed'
+}
+
+function extractRequestAccessBlock(data: unknown): RequestAccessBlock | null {
+  if (!data || typeof data !== 'object' || !('detail' in data)) return null
+  const detail = (data as { detail: unknown }).detail
+  if (!detail || typeof detail !== 'object' || Array.isArray(detail)) return null
+  const o = detail as { code?: unknown; services?: unknown }
+  const code = o.code
+  if (
+    (code === 'connection_ignored' || code === 'connection_revoked') &&
+    Array.isArray(o.services)
+  ) {
+    const out = o.services.filter((x): x is string => typeof x === 'string')
+    if (out.length === 0) return null
+    return { code: code as RequestAccessBlock['code'], services: out }
+  }
+  return null
 }
 
 export async function getStatus(): Promise<StatusInfo> {
@@ -154,11 +182,18 @@ export async function checkDestinationAccess(
 export class HttpError extends Error {
   status: number
   statusText: string
-  constructor(status: number, statusText: string, message: string) {
+  requestAccessBlock?: RequestAccessBlock
+  constructor(
+    status: number,
+    statusText: string,
+    message: string,
+    opts?: { requestAccessBlock?: RequestAccessBlock },
+  ) {
     super(message)
     this.status = status
     this.statusText = statusText
     this.name = 'HttpError'
+    this.requestAccessBlock = opts?.requestAccessBlock
   }
 }
 
@@ -176,8 +211,22 @@ export async function submitAccessRequest(
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
   })
-  const data: unknown = await res.json().catch(() => ({}))
+  const text = await res.text()
+  let data: unknown = {}
+  if (text) {
+    try {
+      data = JSON.parse(text) as unknown
+    } catch {
+      data = {}
+    }
+  }
   if (!res.ok) {
+    const block = res.status === 403 ? extractRequestAccessBlock(data) : null
+    if (block) {
+      throw new HttpError(res.status, res.statusText, parseErrorDetail(data), {
+        requestAccessBlock: block,
+      })
+    }
     throw new HttpError(res.status, res.statusText, parseErrorDetail(data))
   }
   return {

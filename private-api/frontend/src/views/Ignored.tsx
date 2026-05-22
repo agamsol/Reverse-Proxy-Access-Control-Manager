@@ -24,7 +24,7 @@ function matchesQuery(c: DeniedConnection, q: string): boolean {
   const n = q.trim().toLowerCase()
   if (!n) return true
   if (String(c.ip_address).toLowerCase().includes(n)) return true
-  if (c.service_name.toLowerCase().includes(n)) return true
+  if ((c.service_name ?? '').toLowerCase().includes(n)) return true
   if (c.contact_methods?.name?.toLowerCase().includes(n)) return true
   const email = primaryEmail(c.contact_methods)
   if (email && email.toLowerCase().includes(n)) return true
@@ -64,7 +64,11 @@ export function IgnoredView({ t }: IgnoredViewProps) {
     if (!items) return []
     return items
       .filter((c) => matchesQuery(c, query))
-      .sort((a, b) => a.service_name.localeCompare(b.service_name, undefined, { sensitivity: 'base' }))
+      .sort((a, b) =>
+        (a.service_name ?? '').localeCompare(b.service_name ?? '', undefined, {
+          sensitivity: 'base',
+        }),
+      )
   }, [items, query])
 
   const onQueryChange = (q: string) => {

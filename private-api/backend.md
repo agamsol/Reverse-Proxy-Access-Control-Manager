@@ -228,6 +228,32 @@ Accept a pending connection request and grant access.
 |---|---|---|
 | `id` | `MongoID` | 24-char hex string |
 
+**Request Body (optional JSON)** `AcceptPendingConnectionRequestModel`:
+
+Omit the body, send an empty object `{}`, or send `{ "explicit": false }` for **legacy** behavior: the allowed row is built only from the pending document (same as older clients). The admin UI sends `explicit: true` with edited fields.
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `explicit` | `bool` | No | Default `false`. When `true`, the other fields below are applied (admin overrides). |
+| `service_name` | `str` | Yes when `explicit` | Must match an existing catalog service `name` (max 200 chars, trimmed). |
+| `contact_name` | `str` \| `null` | No | Stored on the grant (max 32 chars). |
+| `contact_email` | `EmailStr` \| `null` | No | Stored as `{ email: false }` when set. |
+| `contact_phone` | `str` \| `null` | No | Stored as `{ phone: false }` when non-empty. |
+| `expiry_mode` | `"inherit"` \| `"none"` \| `"at"` | No | Default `"inherit"`. Ignored unless `explicit` is `true`. |
+| `expire_at` | `datetime` \| `null` | When `expiry_mode` is `"at"` | Absolute expiry instant (ISO-8601 in JSON). Must be in the future. Ignored for `inherit` / `none`. |
+
+**`expiry_mode` (when `explicit` is `true`):**
+
+- **`inherit`** — `ExpireAt` is computed from the pending row’s `service.expiry` minutes from **approval time** (same as legacy). If the request had no duration, access does not expire.
+- **`none`** — `ExpireAt` is `null` (no expiry), regardless of what the requester asked for.
+- **`at`** — `ExpireAt` is exactly `expire_at` (admin-chosen wall time).
+
+**Errors:**
+
+- `404 Not Found` — Pending id not found, or `explicit` is `true` and `service_name` is not in the catalog.
+- `409 Conflict` — An **active** allowed row already exists for the same IP and chosen `service_name`.
+- `422 Unprocessable Entity` — Validation errors (e.g. `expire_at` in the past when `expiry_mode` is `at`).
+
 **Response** `AllowedConnectionModel`:
 
 | Field | Type | Description |
@@ -291,6 +317,35 @@ List all currently allowed connections.
 | `contact_methods` | `ContactMethodsModel` | Contact info |
 | `service_name` | `str` | Service with access |
 | `ExpireAt` | `datetime` \| `null` | When access expires |
+
+---
+
+### `POST /connection/create-allowed`
+
+Create an allowed connection **without** a prior pending request (admin grant). Stored documents match the shape produced when accepting a pending request.
+
+**Auth:** Bearer token (same as all other private routes after login — **administrator JWT only** in this deployment).
+
+**Request Body** `AdminCreateAllowedConnectionRequestModel` (JSON):
+
+| Field | Type | Required | Constraints | Description |
+|---|---|---|---|---|
+| `ip_address` | `IPvAnyAddress` | Yes | — | Client IP to allow through the proxy for this service |
+| `service_name` | `str` | Yes | 1–200 chars, trimmed | Must match an existing service `name` in the catalog |
+| `contact_name` | `str` \| `null` | No | max 32 chars | Stored on the grant; if omitted or blank, defaults to `"(admin grant)"` |
+| `contact_email` | `EmailStr` \| `null` | No | — | Stored as a single-entry map `{ email: false }` like pending flows |
+| `contact_phone` | `str` \| `null` | No | max 64 chars | Stored as a single-entry map `{ phone: false }` when non-empty |
+| `expiry_minutes` | `int` \| `null` | No | 1–525600 when set | Minutes from **now** until `ExpireAt`; omit or `null` for **no expiry** (ignored if `expire_at` is set) |
+| `expire_at` | `datetime` \| `null` | No | Must be **in the future** when set | Absolute UTC expiry; when set, **overrides** `expiry_minutes` |
+
+**Response:** `AllowedConnectionModel` (HTTP **201 Created**)
+
+**Errors:**
+- `404 Not Found` — No service with the given `service_name`.
+- `409 Conflict` — An **active** allowed row already exists for the same `ip_address` + `service_name` (no expiry or expiry still in the future).
+- `422 Unprocessable Entity` — Validation errors (e.g. `expire_at` in the past, or both `expire_at` and invalid `expiry_minutes`).
+
+**Side effects:** None (no webhook; unlike `POST /pending/accept/{id}`).
 
 ---
 
@@ -464,9 +519,10 @@ All fields from `HTTPRequest` plus:
 | Yes | `PATCH` | `/service/edit/{service_name}` | Edit a service |
 | Yes | `DELETE` | `/service/delete/{service_name}` | Delete a service |
 | Yes | `GET` | `/pending/get-pending-connections` | List pending requests |
-| Yes | `POST` | `/pending/accept/{id}` | Accept a pending request |
+| Yes | `POST` | `/pending/accept/{id}` | Accept a pending request (optional JSON overrides) |
 | Yes | `DELETE` | `/pending/deny/{id}` | Deny a pending request |
 | Yes | `GET` | `/connection/get-connection-list` | List allowed connections |
+| Yes | `POST` | `/connection/create-allowed` | Admin grant without a pending request |
 | Yes | `DELETE` | `/connection/revoke/{id}` | Revoke an allowed connection |
 | Yes | `GET` | `/connection/ignored/get-ignored-list` | List ignored IPs |
 | Yes | `POST` | `/connection/ignored/remove/{id}` | Unignore an IP address |
@@ -475,4 +531,4 @@ All fields from `HTTPRequest` plus:
 | Yes | `DELETE` | `/webhook/remove-webhook` | Remove a webhook |
 | Yes | `PATCH` | `/webhook/modify-webhook` | Modify a webhook |
 
-**Total: 18 endpoints** (2 public, 16 protected by Bearer token)
+**Total: 19 endpoints** (2 public, 17 protected by Bearer token)

@@ -1,12 +1,17 @@
 import os
 from pathlib import Path
 from dotenv import load_dotenv
-from fastapi import APIRouter, status
+from fastapi import APIRouter, status, Body
+from typing import Optional
 from common_custom.utils.webhook_events import Events
 from common_custom.controllers.mongodb import MongoDb
 from common_custom.controllers.validators import MongoID
 from common_custom.controllers.pydantic.allowed_models import AllowedConnectionModel, DeniedSuccessResponseModel
-from common_custom.controllers.pydantic.pending_models import PendingConnectionDatabaseModel, DenyConnectionRequestModel
+from common_custom.controllers.pydantic.pending_models import (
+    PendingConnectionDatabaseModel,
+    DenyConnectionRequestModel,
+    AcceptPendingConnectionRequestModel,
+)
 
 DATA_DIR = (Path(__file__).resolve().parents[2] / "data").resolve()
 
@@ -50,9 +55,16 @@ async def get_pending_connections():
     status_code=status.HTTP_200_OK,
     response_model=AllowedConnectionModel
 )
-async def accept_connection(id: MongoID):
+async def accept_connection(
+    id: MongoID,
+    body: Optional[AcceptPendingConnectionRequestModel] = Body(default=None),
+):
 
-    allowed_connection_payload = await mongodb_helper.accept_pending_connection(connection_id=id)
+    overrides = body if body is not None and body.explicit else None
+    allowed_connection_payload = await mongodb_helper.accept_pending_connection(
+        connection_id=id,
+        overrides=overrides,
+    )
 
     # Trigger event: pending.accepted
     await Events.pending_accepted(allowed_connection_payload)

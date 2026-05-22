@@ -198,13 +198,52 @@ async def request_access_landing(access_request: AccessRequest, request: Request
 
     services_allowed_to_request = []
     remote_address = request.client.host
+    remote_str = str(remote_address)
     user_requested_services = access_request.services
 
     if user_requested_services is not None:
 
+        valid_service_names = set(services_collection.distinct("name"))
+
+        ignored_services: list[str] = []
+        revoked_services: list[str] = []
+        for service in user_requested_services:
+            if service.name not in valid_service_names:
+                continue
+            if await mongodb_helper.is_connection_ignored_for_service(remote_str, service.name):
+                ignored_services.append(service.name)
+            elif await mongodb_helper.is_connection_revoked_for_service(remote_str, service.name):
+                revoked_services.append(service.name)
+
+        if ignored_services:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail={
+                    "code": "connection_ignored",
+                    "services": sorted(set(ignored_services)),
+                    "message": (
+                        "This network address was blocked from submitting access requests for the following "
+                        "service(s). An administrator must remove the block before you can request access again."
+                    ),
+                },
+            )
+
+        if revoked_services:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail={
+                    "code": "connection_revoked",
+                    "services": sorted(set(revoked_services)),
+                    "message": (
+                        "Access for your network address to the following service(s) was revoked by an administrator. "
+                        "You cannot submit a new access request until access is granted again."
+                    ),
+                },
+            )
+
         for service in user_requested_services:
 
-            if service.name in services_collection.distinct("name"):
+            if service.name in valid_service_names:
 
                 # Search for existing requests from this IP for this service
 
@@ -223,7 +262,7 @@ async def request_access_landing(access_request: AccessRequest, request: Request
 
                 await mongodb_helper.create_pending_connection(
                     contact_methods=contact_methods_db,
-                    remote_address=remote_address,
+                    remote_address=remote_str,
                     service=service.model_dump(),
                     additional_notes=access_request.note,
                     request_latitude=access_request.location.lat,
@@ -231,7 +270,7 @@ async def request_access_landing(access_request: AccessRequest, request: Request
                 )
 
                 # Trigger event: pending.new
-                await Events.pending_new(access_request, remote_address, service)
+                await Events.pending_new(access_request, remote_str, service)
 
     if len(services_allowed_to_request) == 0:
 
@@ -241,7 +280,7 @@ async def request_access_landing(access_request: AccessRequest, request: Request
         )
 
     return {
-        "ip_address": remote_address,
+        "ip_address": remote_str,
         "services_requested": services_allowed_to_request,
         "message": "Your request has been received and is pending approval."
     }

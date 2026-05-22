@@ -28,11 +28,11 @@ export type LoginResponse = {
 export type Protocol = 'http' | 'https'
 
 export type ServiceInfo = {
-  name: string
-  description: string | null
-  internal_address: string
-  port: number
-  protocol: Protocol
+  name?: string | null
+  description?: string | null
+  internal_address?: string | null
+  port?: number | null
+  protocol?: Protocol | null
 }
 
 export type ServiceEditPayload = {
@@ -41,6 +41,15 @@ export type ServiceEditPayload = {
   internal_address?: string | null
   port?: number | null
   protocol?: Protocol | null
+}
+
+/** Request body for `POST /service/create` — all catalog fields required. */
+export type ServiceCreateBody = {
+  name: string
+  description: string | null
+  internal_address: string
+  port: number
+  protocol: Protocol
 }
 
 /**
@@ -57,7 +66,7 @@ export type ContactMethods = {
 }
 
 export type ServiceItem = {
-  name: string
+  name?: string | null
   expiry: number | null
 }
 
@@ -81,6 +90,30 @@ export type AllowedConnection = {
   contact_methods: ContactMethods
   service_name: string
   ExpireAt: string | null
+}
+
+/** Body for `POST /connection/create-allowed` (admin grant). */
+export type CreateAllowedConnectionBody = {
+  ip_address: string
+  service_name: string
+  contact_name?: string | null
+  contact_email?: string | null
+  contact_phone?: string | null
+  /** Minutes from grant time; ignored if `expire_at` is set. */
+  expiry_minutes?: number | null
+  /** ISO-8601 instant (UTC); when set, overrides `expiry_minutes`. */
+  expire_at?: string | null
+}
+
+/** Body for `POST /pending/accept/{id}` when the admin edits grant details in the UI. */
+export type AcceptPendingBody = {
+  explicit: true
+  service_name: string
+  contact_name?: string | null
+  contact_email?: string | null
+  contact_phone?: string | null
+  expiry_mode: 'inherit' | 'none' | 'at'
+  expire_at?: string | null
 }
 
 export type DeniedConnection = {
@@ -324,7 +357,7 @@ export function listServices(): Promise<ServiceInfo[]> {
   return apiFetch<ServiceInfo[]>('/service/get-service-list')
 }
 
-export function createService(body: ServiceInfo): Promise<ServiceInfo> {
+export function createService(body: ServiceCreateBody): Promise<ServiceInfo> {
   return apiFetch<ServiceInfo>('/service/create', { method: 'POST', json: body })
 }
 
@@ -350,9 +383,13 @@ export function listPending(): Promise<PendingConnection[]> {
   return apiFetch<PendingConnection[]>('/pending/get-pending-connections')
 }
 
-export function acceptPending(id: string): Promise<AcceptPendingResponse> {
+export function acceptPending(
+  id: string,
+  body?: AcceptPendingBody,
+): Promise<AcceptPendingResponse> {
   return apiFetch<AcceptPendingResponse>(`/pending/accept/${encodeURIComponent(id)}`, {
     method: 'POST',
+    ...(body !== undefined ? { json: body } : {}),
   })
 }
 
@@ -370,6 +407,15 @@ export function denyPending(
 
 export function listConnections(): Promise<AllowedConnection[]> {
   return apiFetch<AllowedConnection[]>('/connection/get-connection-list')
+}
+
+export function createAllowedConnection(
+  body: CreateAllowedConnectionBody,
+): Promise<AllowedConnection> {
+  return apiFetch<AllowedConnection>('/connection/create-allowed', {
+    method: 'POST',
+    json: body,
+  })
 }
 
 export function revokeConnection(id: string): Promise<AllowedConnection> {

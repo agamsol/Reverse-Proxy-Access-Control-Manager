@@ -35,13 +35,31 @@ type ServiceDraft = {
   protocol: Protocol
 }
 
+/** Stable row id when fields are incomplete — avoids `.toLowerCase()` / `localeCompare` crashes. */
+function serviceIdentity(s: ServiceInfo): string {
+  const n = s.name
+  if (typeof n === 'string' && n.trim() !== '') return n.trim()
+  const addr = s.internal_address != null ? String(s.internal_address).trim() : ''
+  return addr || '__unnamed_service__'
+}
+
+/** Path segment for `/service/edit|delete/{service_name}` (Mongo `name` when set). */
+function serviceNameForApi(s: ServiceInfo): string {
+  if (typeof s.name === 'string' && s.name.trim() !== '') return s.name.trim()
+  return s.internal_address != null ? String(s.internal_address).trim() : ''
+}
+
 function toDraft(s?: ServiceInfo): ServiceDraft {
+  const p = s?.port
+  const portStr =
+    p != null && Number.isFinite(Number(p)) ? String(Math.trunc(Number(p))) : '80'
   return {
-    name: s?.name ?? '',
+    name: typeof s?.name === 'string' ? s.name : '',
     description: s?.description ?? '',
-    internal_address: s?.internal_address ?? '127.0.0.1',
-    port: s ? String(s.port) : '80',
-    protocol: s?.protocol ?? 'http',
+    internal_address:
+      s?.internal_address != null ? String(s.internal_address) : '127.0.0.1',
+    port: s ? portStr : '80',
+    protocol: s?.protocol === 'https' || s?.protocol === 'http' ? s.protocol : 'http',
   }
 }
 
@@ -56,9 +74,9 @@ function matchesQuery(s: ServiceInfo, q: string): boolean {
   const n = q.trim().toLowerCase()
   if (!n) return true
   return (
-    s.name.toLowerCase().includes(n) ||
+    (s.name ?? '').toLowerCase().includes(n) ||
     (s.description?.toLowerCase().includes(n) ?? false) ||
-    String(s.internal_address).toLowerCase().includes(n)
+    String(s.internal_address ?? '').toLowerCase().includes(n)
   )
 }
 
@@ -97,7 +115,11 @@ export function ServicesView({ t }: ServicesViewProps) {
     if (!items) return []
     return items
       .filter((s) => matchesQuery(s, query))
-      .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }))
+      .sort((a, b) =>
+        serviceIdentity(a).localeCompare(serviceIdentity(b), undefined, {
+          sensitivity: 'base',
+        }),
+      )
   }, [items, query])
 
   const openCreate = () => {
@@ -134,19 +156,28 @@ export function ServicesView({ t }: ServicesViewProps) {
     setSubmitting(true)
     try {
       if (editing) {
+        const apiKey = serviceNameForApi(editing)
+        if (!apiKey) {
+          setFormError(t.errGeneric)
+          return
+        }
+        const prevAddr = String(editing.internal_address ?? '')
+        const prevPort =
+          editing.port != null && Number.isFinite(Number(editing.port))
+            ? Math.trunc(Number(editing.port))
+            : 80
         const payload: ServiceEditPayload = {
-          name: draft.name !== editing.name ? draft.name.trim() : null,
+          name: draft.name !== (editing.name ?? '') ? draft.name.trim() : null,
           description: (draft.description.trim() || null) !== (editing.description ?? null)
             ? (draft.description.trim() || null)
             : null,
           internal_address:
-            draft.internal_address.trim() !== editing.internal_address
-              ? draft.internal_address.trim()
-              : null,
-          port: port !== editing.port ? port : null,
-          protocol: draft.protocol !== editing.protocol ? draft.protocol : null,
+            draft.internal_address.trim() !== prevAddr ? draft.internal_address.trim() : null,
+          port: port !== prevPort ? port : null,
+          protocol:
+            draft.protocol !== (editing.protocol ?? 'http') ? draft.protocol : null,
         }
-        await editService(editing.name, payload)
+        await editService(apiKey, payload)
       } else {
         await createService({
           name: draft.name.trim(),
@@ -173,7 +204,12 @@ export function ServicesView({ t }: ServicesViewProps) {
 
   const performDelete = async () => {
     if (!toDelete) return
-    await deleteService(toDelete.name)
+    const key = serviceNameForApi(toDelete)
+    if (!key) {
+      setToDelete(null)
+      return
+    }
+    await deleteService(key)
     setToDelete(null)
     await refresh()
   }
@@ -237,22 +273,30 @@ export function ServicesView({ t }: ServicesViewProps) {
               </tr>
             </thead>
             <tbody>
-              {filtered.map((s) => (
-                <tr key={s.name}>
-                  <td className="cell-title">{s.name}</td>
+              {filtered.map((s, rowIdx) => (
+                <tr key={`${serviceIdentity(s)}-${rowIdx}`}>
+                  <td className="cell-title">
+                    {(s.name ?? '').trim()
+                      ? s.name
+                      : serviceIdentity(s) !== '__unnamed_service__'
+                        ? serviceIdentity(s)
+                        : '—'}
+                  </td>
                   <td className="cell-muted">
                     {s.description ? s.description : <span className="muted">—</span>}
                   </td>
-                  <td className="mono cell-mono">{String(s.internal_address)}</td>
-                  <td className="mono num">{s.port}</td>
+                  <td className="mono cell-mono">{String(s.internal_address ?? '')}</td>
+                  <td className="mono num">{s.port ?? '—'}</td>
                   <td>
                     <span
                       className={
                         'proto-badge ' +
-                        (s.protocol === 'https' ? 'proto-badge--secure' : 'proto-badge--open')
+                        ((s.protocol ?? 'http') === 'https'
+                          ? 'proto-badge--secure'
+                          : 'proto-badge--open')
                       }
                     >
-                      {s.protocol}
+                      {s.protocol ?? 'http'}
                     </span>
                   </td>
                   <td className="actions-col">
@@ -415,7 +459,9 @@ export function ServicesView({ t }: ServicesViewProps) {
         onConfirm={performDelete}
         onClose={() => setToDelete(null)}
       >
-        {toDelete ? <p>{fmt(t.servicesDeletePrompt, { name: toDelete.name })}</p> : null}
+        {toDelete ? (
+          <p>{fmt(t.servicesDeletePrompt, { name: serviceIdentity(toDelete) })}</p>
+        ) : null}
       </ConfirmDialog>
     </div>
   )
