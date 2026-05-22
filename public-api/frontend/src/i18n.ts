@@ -64,6 +64,11 @@ const en = {
   errRequiredContact: 'Please fill in the required contact fields: {fields}.',
   errRevokedAccess:
     'Access for your address to these services was revoked and new requests are blocked until an administrator restores access: {services}.',
+  accessConflictModalTitle: 'Request not needed',
+  accessConflictModalLede:
+    'From this network address there is already a pending approval request and/or active access for the services below. You cannot submit a duplicate request for those services.',
+  accessConflictPendingListHeading: 'Already waiting for approval',
+  accessConflictAllowedListHeading: 'Access already active',
   ignoreBlockModalTitle: 'Request blocked',
   ignoreBlockModalLede:
     'Access requests from this network address have been restricted. Please contact your system administrator to restore access.',

@@ -22,6 +22,7 @@ import {
   submitAccessRequest,
   type AccessCheckResponse,
   type ContactFieldsConfig,
+  type RequestAccessConflict,
   type ServiceInfo,
   type StatusInfo,
 } from './api'
@@ -37,7 +38,7 @@ const THEME_KEY = 'guest-portal-theme'
 const LANG_KEY = 'guest-portal-lang'
 const GITHUB_URL = 'https://github.com/agamsol/Reverse-Proxy-Access-Control-Manager'
 
-/** After `connection_ignored`, close the request modal first; open the block modal after this delay (ms). */
+/** After closing the request modal, open ignore-block or access-conflict modal after this delay (ms). */
 const IGNORE_BLOCK_MODAL_DELAY_MS = 200
 
 type GeoStatus = 'idle' | 'prompting' | 'ok' | 'denied'
@@ -454,7 +455,7 @@ export default function App() {
   /** After explicit detach, skip auto `getCurrentPosition` while permission is still granted. */
   const skipAutoLocationAfterDetachRef = useRef(false)
   const wasRequestModalRef = useRef(false)
-  /** Opens ignore-block modal after request modal unmount. */
+  /** Opens follow-up modal after the request dialog closes (`connection_ignored` or 409 conflict). */
   const ignoredBlockOpenTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const isSecureContext = useMemo(() => {
@@ -469,8 +470,10 @@ export default function App() {
 
   const [submitting, setSubmitting] = useState(false)
   const [formError, setFormError] = useState<string | null>(null)
-  /** `connection_ignored`: service ids blocked for this client (own modal after request dialog closes). */
+  /** `connection_ignored`: service ids (modal after request dialog closes). */
   const [ignoredBlockServices, setIgnoredBlockServices] = useState<string[] | null>(null)
+  /** `request_access_conflict`: pending / already-allowed lists (same modal pattern). */
+  const [accessConflictDetail, setAccessConflictDetail] = useState<RequestAccessConflict | null>(null)
 
   const [serviceQuery, setServiceQuery] = useState('')
   const [collapsedCategories, setCollapsedCategories] = useState<Set<string>>(() => new Set())
@@ -684,6 +687,7 @@ export default function App() {
       ignoredBlockOpenTimerRef.current = null
     }
     setIgnoredBlockServices(null)
+    setAccessConflictDetail(null)
     setModal(null)
   }, [])
 
@@ -793,10 +797,12 @@ export default function App() {
       lastSuccessRef.current = res.data.message
       resetForm()
       setIgnoredBlockServices(null)
+      setAccessConflictDetail(null)
       setModal('success')
     } catch (err) {
       if (err instanceof HttpError && err.requestAccessBlock?.code === 'connection_ignored') {
         setFormError(null)
+        setAccessConflictDetail(null)
         const blocked = [...err.requestAccessBlock.services]
         if (ignoredBlockOpenTimerRef.current != null) {
           clearTimeout(ignoredBlockOpenTimerRef.current)
@@ -805,6 +811,21 @@ export default function App() {
         ignoredBlockOpenTimerRef.current = window.setTimeout(() => {
           ignoredBlockOpenTimerRef.current = null
           setIgnoredBlockServices(blocked)
+        }, IGNORE_BLOCK_MODAL_DELAY_MS)
+      } else if (err instanceof HttpError && err.requestAccessConflict) {
+        setFormError(null)
+        setIgnoredBlockServices(null)
+        const detail: RequestAccessConflict = {
+          already_pending: [...err.requestAccessConflict.already_pending],
+          already_allowed: [...err.requestAccessConflict.already_allowed],
+        }
+        if (ignoredBlockOpenTimerRef.current != null) {
+          clearTimeout(ignoredBlockOpenTimerRef.current)
+        }
+        setModal(null)
+        ignoredBlockOpenTimerRef.current = window.setTimeout(() => {
+          ignoredBlockOpenTimerRef.current = null
+          setAccessConflictDetail(detail)
         }, IGNORE_BLOCK_MODAL_DELAY_MS)
       } else if (err instanceof HttpError && err.requestAccessBlock?.code === 'connection_revoked') {
         setFormError(
@@ -956,6 +977,8 @@ export default function App() {
                     clearTimeout(ignoredBlockOpenTimerRef.current)
                     ignoredBlockOpenTimerRef.current = null
                   }
+                  setIgnoredBlockServices(null)
+                  setAccessConflictDetail(null)
                   setModal('request')
                 }}
                 disabled={ctaDisabled}
@@ -1485,6 +1508,48 @@ export default function App() {
             catalog={services}
             listLabel={t.ignoreBlockModalListHeading}
           />
+        </Modal>
+      ) : null}
+
+      {accessConflictDetail ? (
+        <Modal
+          open
+          size="sm"
+          onClose={() => setAccessConflictDetail(null)}
+          title={t.accessConflictModalTitle}
+          labelClose={t.close}
+          footer={
+            <button
+              type="button"
+              className="btn btn--primary"
+              onClick={() => setAccessConflictDetail(null)}
+            >
+              {t.ignoreBlockModalButton}
+            </button>
+          }
+        >
+          <div className="ignore-block-intro">
+            <div className="ignore-block-icon-wrap" aria-hidden>
+              <IgnoreBlockIcon />
+            </div>
+            <p className="ignore-block-lede">{t.accessConflictModalLede}</p>
+          </div>
+          <div className="access-conflict-lists">
+          {accessConflictDetail.already_pending.length > 0 ? (
+            <BlockedServicesNotice
+              serviceNames={accessConflictDetail.already_pending}
+              catalog={services}
+              listLabel={t.accessConflictPendingListHeading}
+            />
+          ) : null}
+          {accessConflictDetail.already_allowed.length > 0 ? (
+            <BlockedServicesNotice
+              serviceNames={accessConflictDetail.already_allowed}
+              catalog={services}
+              listLabel={t.accessConflictAllowedListHeading}
+            />
+          ) : null}
+          </div>
         </Modal>
       ) : null}
 

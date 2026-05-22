@@ -177,6 +177,29 @@ class MongoDb:
         )
         return doc is not None
 
+    async def has_active_pending_for_service(self, ip_str: str, service_name: str) -> bool:
+        """True when this client already has a pending access request for the service."""
+        ips = _client_ip_query_variants(ip_str)
+        if not ips or not service_name:
+            return False
+        doc = self.database[self.pending_collection_name].find_one(
+            {"ip_address": {"$in": ips}, "service.name": service_name}
+        )
+        return doc is not None
+
+    async def has_active_allowed_for_service(self, ip_str: str, service_name: str) -> bool:
+        """True when a non-expired allowed connection exists for this IP and service."""
+        ips = _client_ip_query_variants(ip_str)
+        if not ips or not service_name:
+            return False
+        allowed_collection = self.database[self.allowed_collection_name]
+        now = datetime.now(timezone.utc).replace(tzinfo=None)
+        for conn in allowed_collection.find({"ip_address": {"$in": ips}, "service_name": service_name}):
+            exp = conn.get("ExpireAt")
+            if exp is None or exp > now:
+                return True
+        return False
+
     async def get_service(self, service_name: str):
 
         services_collection = self.database[self.services_collection_name]

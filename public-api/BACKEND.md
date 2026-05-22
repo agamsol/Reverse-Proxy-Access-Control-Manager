@@ -141,6 +141,19 @@ Submit a request for access to one or more services. For each requested service 
 
     If both conditions apply to different services in the same request, **`connection_ignored` is returned first** (only the ignored subset appears in `services`).
 
+- `409 Conflict` — The client already has a **pending** request and/or an **active allowed** connection for one or more of the requested services. No new pending rows are created. The `detail` object includes:
+
+    **`request_access_conflict`** — Lists affected catalog names in `already_pending` and/or `already_allowed` (each may be an empty array; at least one list is non-empty).
+
+    ```json
+    {
+      "code": "request_access_conflict",
+      "already_pending": ["service-a"],
+      "already_allowed": ["service-b"],
+      "message": "One or more selected services cannot accept a new request from this address (a request is already pending or access is already active)."
+    }
+    ```
+
 - `422 Unprocessable Entity` — One or more contact fields that are `visible` and `required` in `data/contact-fields.json` are missing or empty. The `detail` payload is:
 
     ```json

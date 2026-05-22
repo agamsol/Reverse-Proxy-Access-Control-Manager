@@ -442,6 +442,12 @@
   line-height: 1.35;
 }
 
+.access-conflict-lists {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
 .modal-head {
   display: flex;
   align-items: center;

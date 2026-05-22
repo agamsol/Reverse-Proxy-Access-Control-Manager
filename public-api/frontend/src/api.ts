@@ -49,6 +49,12 @@ export type RequestAccessBlock = {
   services: string[]
 }
 
+/** `POST /request-access` 409 `request_access_conflict` body (subset parsed for UI). */
+export type RequestAccessConflict = {
+  already_pending: string[]
+  already_allowed: string[]
+}
+
 function parseErrorDetail(raw: unknown): string {
   if (typeof raw === 'string') return raw
   if (raw && typeof raw === 'object' && 'detail' in raw) {
@@ -84,6 +90,22 @@ function extractRequestAccessBlock(data: unknown): RequestAccessBlock | null {
     return { code: code as RequestAccessBlock['code'], services: out }
   }
   return null
+}
+
+function extractRequestAccessConflict(data: unknown): RequestAccessConflict | null {
+  if (!data || typeof data !== 'object' || !('detail' in data)) return null
+  const detail = (data as { detail: unknown }).detail
+  if (!detail || typeof detail !== 'object' || Array.isArray(detail)) return null
+  const o = detail as { code?: unknown; already_pending?: unknown; already_allowed?: unknown }
+  if (o.code !== 'request_access_conflict') return null
+  const pending = Array.isArray(o.already_pending)
+    ? o.already_pending.filter((x): x is string => typeof x === 'string')
+    : []
+  const allowed = Array.isArray(o.already_allowed)
+    ? o.already_allowed.filter((x): x is string => typeof x === 'string')
+    : []
+  if (pending.length === 0 && allowed.length === 0) return null
+  return { already_pending: pending, already_allowed: allowed }
 }
 
 export async function getStatus(): Promise<StatusInfo> {
@@ -183,17 +205,19 @@ export class HttpError extends Error {
   status: number
   statusText: string
   requestAccessBlock?: RequestAccessBlock
+  requestAccessConflict?: RequestAccessConflict
   constructor(
     status: number,
     statusText: string,
     message: string,
-    opts?: { requestAccessBlock?: RequestAccessBlock },
+    opts?: { requestAccessBlock?: RequestAccessBlock; requestAccessConflict?: RequestAccessConflict },
   ) {
     super(message)
     this.status = status
     this.statusText = statusText
     this.name = 'HttpError'
     this.requestAccessBlock = opts?.requestAccessBlock
+    this.requestAccessConflict = opts?.requestAccessConflict
   }
 }
 
@@ -225,6 +249,12 @@ export async function submitAccessRequest(
     if (block) {
       throw new HttpError(res.status, res.statusText, parseErrorDetail(data), {
         requestAccessBlock: block,
+      })
+    }
+    const conflict = res.status === 409 ? extractRequestAccessConflict(data) : null
+    if (conflict) {
+      throw new HttpError(res.status, res.statusText, parseErrorDetail(data), {
+        requestAccessConflict: conflict,
       })
     }
     throw new HttpError(res.status, res.statusText, parseErrorDetail(data))

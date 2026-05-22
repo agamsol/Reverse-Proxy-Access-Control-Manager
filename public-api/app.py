@@ -241,16 +241,33 @@ async def request_access_landing(access_request: AccessRequest, request: Request
                 },
             )
 
+        already_pending: list[str] = []
+        already_allowed: list[str] = []
+        for service in user_requested_services:
+            if service.name not in valid_service_names:
+                continue
+            if await mongodb_helper.has_active_pending_for_service(remote_str, service.name):
+                already_pending.append(service.name)
+            elif await mongodb_helper.has_active_allowed_for_service(remote_str, service.name):
+                already_allowed.append(service.name)
+
+        if already_pending or already_allowed:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail={
+                    "code": "request_access_conflict",
+                    "already_pending": sorted(set(already_pending)),
+                    "already_allowed": sorted(set(already_allowed)),
+                    "message": (
+                        "One or more selected services cannot accept a new request from this address "
+                        "(a request is already pending or access is already active)."
+                    ),
+                },
+            )
+
         for service in user_requested_services:
 
             if service.name in valid_service_names:
-
-                # Search for existing requests from this IP for this service
-
-                # I only need to do this when the request is accepted
-                # existing_request = pending_connections_collection.find_one(
-                #     {"ip_address": remote_address, "service": service.name}
-                # )
 
                 services_allowed_to_request.append(service)
 
@@ -330,6 +347,11 @@ def _frontend_file_response(path_within: str) -> FileResponse:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
         if candidate.is_file():
             return FileResponse(candidate)
+        # Do not fall through to `index.html` for missing Vite bundles under
+        # `assets/` — the browser would mis-parse HTML as JS/CSS and the UI
+        # appears "unstyled" / broken with no clear console hint.
+        if path_within == "assets" or path_within.startswith("assets/"):
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
     index = STATIC_ROOT / "index.html"
     if not index.is_file():
         raise HTTPException(
