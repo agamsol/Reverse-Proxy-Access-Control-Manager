@@ -1,36 +1,19 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useAppearance } from './appearance-context'
 
-const THEME_KEY = 'rpacm-admin-theme'
+export { useEnglishOnlyLocale } from './hooks-locale'
+export {
+  ACCENT_PALETTES,
+  ACCENT_SWATCH,
+  AppearanceProvider,
+  bootstrapAppearance,
+  useAppearance,
+  type AccentPalette,
+  type DensityMode,
+  type ThemeMode,
+} from './appearance-context'
 
+/** @deprecated Use `useAppearance` from the appearance context. */
 export function useTheme() {
-  const [theme, setTheme] = useState<'light' | 'dark'>(() => {
-    if (typeof localStorage === 'undefined') return 'light'
-    const stored = localStorage.getItem(THEME_KEY)
-    return stored === 'dark' ? 'dark' : 'light'
-  })
-
-  useEffect(() => {
-    document.documentElement.setAttribute('data-theme', theme)
-    localStorage.setItem(THEME_KEY, theme)
-  }, [theme])
-
-  const toggle = useCallback(() => {
-    setTheme((v) => (v === 'light' ? 'dark' : 'light'))
-  }, [])
-
-  return { theme, toggle }
-}
-
-// The admin dashboard is English-only. Any previously persisted Hebrew
-// preference is cleaned up here so the page direction stays LTR.
-export function useEnglishOnlyLocale() {
-  useEffect(() => {
-    document.documentElement.lang = 'en'
-    document.documentElement.dir = 'ltr'
-    try {
-      localStorage.removeItem('rpacm-admin-lang')
-    } catch {
-      // no-op when localStorage is unavailable
-    }
-  }, [])
+  const { theme, toggleTheme } = useAppearance()
+  return { theme, toggle: toggleTheme }
 }

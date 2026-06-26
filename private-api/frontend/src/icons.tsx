@@ -38,6 +38,27 @@ export const ChevronRightIcon: FC<IconProps> = (p) =>
 export const MenuIcon: FC<IconProps> = (p) =>
   baseStroke(p, <path d="M4 6h16M4 12h16M4 18h16" />)
 
+export const SunIcon: FC<IconProps> = (p) =>
+  baseStroke(
+    p,
+    <>
+      <circle cx="12" cy="12" r="4" />
+      <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41" />
+    </>,
+  )
+
+export const MoonIcon: FC<IconProps> = (p) =>
+  baseStroke(p, <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />)
+
+export const CogIcon: FC<IconProps> = (p) =>
+  baseStroke(
+    p,
+    <>
+      <circle cx="12" cy="12" r="3" />
+      <path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42" />
+    </>,
+  )
+
 export const PlusIcon: FC<IconProps> = (p) => baseStroke(p, <path d="M12 5v14M5 12h14" />)
 export const CheckIcon: FC<IconProps> = (p) => baseStroke(p, <path d="M5 13l4 4L19 7" />)
 export const XIcon: FC<IconProps> = (p) => baseStroke(p, <path d="M6 6l12 12M18 6L6 18" />)

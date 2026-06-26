@@ -827,10 +827,6 @@ export default function App() {
           ignoredBlockOpenTimerRef.current = null
           setAccessConflictDetail(detail)
         }, IGNORE_BLOCK_MODAL_DELAY_MS)
-      } else if (err instanceof HttpError && err.requestAccessBlock?.code === 'connection_revoked') {
-        setFormError(
-          t.errRevokedAccess.replace('{services}', err.requestAccessBlock.services.join(', ')),
-        )
       } else {
         setFormError(err instanceof Error ? err.message : 'Request failed.')
       }

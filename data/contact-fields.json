@@ -1,5 +1,14 @@
 {
-  "name": { "visible": true, "required": true },
-  "email": { "visible": false, "required": false },
-  "phone_number": { "visible": true, "required": true }
+  "name": {
+    "visible": true,
+    "required": false
+  },
+  "email": {
+    "visible": false,
+    "required": false
+  },
+  "phone_number": {
+    "visible": false,
+    "required": false
+  }
 }

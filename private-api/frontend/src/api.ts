@@ -461,3 +461,31 @@ export function removeWebhook(event: WebhookEvent): Promise<DeleteWebhookRespons
     json: { event },
   })
 }
+
+// --- Config -------------------------------------------------------------------
+
+export type ContactFieldFlags = {
+  visible: boolean
+  required: boolean
+}
+
+export type ContactFieldsConfig = {
+  name: ContactFieldFlags
+  email: ContactFieldFlags
+  phone_number: ContactFieldFlags
+}
+
+export type ContactFieldName = keyof ContactFieldsConfig
+
+export function getContactFieldsConfig(): Promise<ContactFieldsConfig> {
+  return apiFetch<ContactFieldsConfig>('/config/get-contact-fields')
+}
+
+export function updateContactFieldsConfig(
+  body: ContactFieldsConfig,
+): Promise<ContactFieldsConfig> {
+  return apiFetch<ContactFieldsConfig>('/config/update-contact-fields', {
+    method: 'PUT',
+    json: body,
+  })
+}

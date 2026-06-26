@@ -1,5 +1,4 @@
 import os
-import json
 import time
 import uvicorn
 from pathlib import Path
@@ -7,6 +6,12 @@ from dotenv import load_dotenv
 from pydantic import BaseModel, IPvAnyAddress, Field
 from common_custom.controllers.mongodb import MongoDb
 from common_custom.utils.webhook_events import Events
+from common_custom.utils.contact_fields import (
+    contact_fields_to_response,
+    ensure_contact_fields_file,
+    load_contact_fields_config,
+)
+from common_custom.utils.pydantic.contact_fields_models import ContactFieldsConfigResponseModel
 from fastapi import FastAPI, status, HTTPException, Request
 from fastapi.responses import FileResponse
 from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
@@ -22,68 +27,7 @@ CONTACT_FIELDS_PATH = DATA_DIR / "contact-fields.json"
 load_dotenv(DATA_DIR / ".env")
 
 
-CONTACT_FIELDS: tuple[str, ...] = ("name", "email", "phone_number")
-
-
-def _ensure_contact_fields_file() -> None:
-    if CONTACT_FIELDS_PATH.exists():
-        return
-
-    DATA_DIR.mkdir(parents=True, exist_ok=True)
-
-    default = {
-        field: {
-            "visible": True,
-            "required": field == "name",
-        }
-        for field in CONTACT_FIELDS
-    }
-
-    with open(CONTACT_FIELDS_PATH, "w", encoding="utf-8") as fh:
-        json.dump(default, fh, indent=2)
-        fh.write("\n")
-
-
-def _default_field_flags() -> dict[str, bool]:
-    return {"visible": True, "required": False}
-
-
-def _coerce_field_entry(value: object) -> dict[str, bool]:
-    """Build ``visible`` / ``required`` from JSON.
-
-    New format: ``{ "name": { "visible": true, "required": false } }`` — if
-    ``visible`` is false the field is omitted from the form; when visible, an
-    asterisk is shown and enforced only when ``required`` is true.
-
-    Legacy: a bare boolean is treated as ``{ "visible": true, "required": <bool> }``.
-    """
-    if isinstance(value, bool):
-        return {"visible": True, "required": value}
-    if isinstance(value, dict):
-        vis = bool(value.get("visible", True))
-        req = bool(value.get("required", False)) and vis
-        return {"visible": vis, "required": req}
-    return _default_field_flags()
-
-
-def _load_contact_fields_config() -> dict[str, dict[str, bool]]:
-    """Load ``data/contact-fields.json`` with per-field ``visible``/``required``."""
-    out = {field: _default_field_flags() for field in CONTACT_FIELDS}
-    try:
-        with open(CONTACT_FIELDS_PATH, "r", encoding="utf-8") as fh:
-            raw = json.load(fh)
-    except (FileNotFoundError, OSError, json.JSONDecodeError):
-        return out
-    if not isinstance(raw, dict):
-        return out
-    for field in CONTACT_FIELDS:
-        if field in raw:
-            out[field] = _coerce_field_entry(raw.get(field))
-    return out
-
-
-_ensure_contact_fields_file()
-contact_fields_config: dict[str, dict[str, bool]] = _load_contact_fields_config()
+ensure_contact_fields_file(CONTACT_FIELDS_PATH)
 
 SERVICE_VERSION = os.getenv("SERVICE_VERSION")
 SERVICE_UNDER_MAINTENANCE = os.getenv("SERVICE_UNDER_MAINTENANCE") == 'True'
@@ -121,20 +65,6 @@ class RequestAccessResponseModel(BaseModel):
     ip_address: IPvAnyAddress
     services_requested: list[ServiceItem]
     message: str = Field(..., max_length=200)
-
-
-class ContactFieldFlagsModel(BaseModel):
-    visible: bool = Field(..., description="Whether the field is shown on the access form")
-    required: bool = Field(
-        ...,
-        description="When visible, whether the value is mandatory (asterisk in the UI)"
-    )
-
-
-class ContactFieldsConfigResponseModel(BaseModel):
-    name: ContactFieldFlagsModel
-    email: ContactFieldFlagsModel
-    phone_number: ContactFieldFlagsModel
 
 
 @app.middleware("http")
@@ -179,6 +109,7 @@ async def request_access_landing(access_request: AccessRequest, request: Request
     # Enforce the dynamic contact-field requirements defined in
     # `data/contact-fields.json`. A value is considered "provided" when it is
     # a non-empty string once stripped of surrounding whitespace.
+    contact_fields_config = load_contact_fields_config(CONTACT_FIELDS_PATH)
     missing_required: list[str] = []
     for field_name, flags in contact_fields_config.items():
         if not flags.get("visible") or not flags.get("required"):
@@ -206,14 +137,11 @@ async def request_access_landing(access_request: AccessRequest, request: Request
         valid_service_names = set(services_collection.distinct("name"))
 
         ignored_services: list[str] = []
-        revoked_services: list[str] = []
         for service in user_requested_services:
             if service.name not in valid_service_names:
                 continue
             if await mongodb_helper.is_connection_ignored_for_service(remote_str, service.name):
                 ignored_services.append(service.name)
-            elif await mongodb_helper.is_connection_revoked_for_service(remote_str, service.name):
-                revoked_services.append(service.name)
 
         if ignored_services:
             raise HTTPException(
@@ -224,19 +152,6 @@ async def request_access_landing(access_request: AccessRequest, request: Request
                     "message": (
                         "This network address was blocked from submitting access requests for the following "
                         "service(s). An administrator must remove the block before you can request access again."
-                    ),
-                },
-            )
-
-        if revoked_services:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail={
-                    "code": "connection_revoked",
-                    "services": sorted(set(revoked_services)),
-                    "message": (
-                        "Access for your network address to the following service(s) was revoked by an administrator. "
-                        "You cannot submit a new access request until access is granted again."
                     ),
                 },
             )
@@ -325,12 +240,8 @@ async def list_services():
     response_model=ContactFieldsConfigResponseModel,
 )
 async def get_contact_fields_config():
-    c = contact_fields_config
-    return ContactFieldsConfigResponseModel(
-        name=ContactFieldFlagsModel(**c["name"]),
-        email=ContactFieldFlagsModel(**c["email"]),
-        phone_number=ContactFieldFlagsModel(**c["phone_number"]),
-    )
+    config = load_contact_fields_config(CONTACT_FIELDS_PATH)
+    return contact_fields_to_response(config)
 
 
 def _frontend_file_response(path_within: str) -> FileResponse:

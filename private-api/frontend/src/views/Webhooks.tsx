@@ -23,6 +23,8 @@ import { EmptyState } from '../components/EmptyState'
 import { Modal } from '../components/Modal'
 import {
   BookIcon,
+  ChevronDownIcon,
+  ChevronUpIcon,
   ExternalLinkIcon,
   PencilIcon,
   PlusIcon,
@@ -41,6 +43,7 @@ import { fmt } from '../format'
 
 type WebhooksViewProps = {
   t: Messages
+  embedded?: boolean
 }
 
 type KV = { key: string; value: string }
@@ -219,7 +222,7 @@ async function sendTestWebhook(target: TestTarget, t: Messages): Promise<TestSta
   }
 }
 
-export function WebhooksView({ t }: WebhooksViewProps) {
+export function WebhooksView({ t, embedded = false }: WebhooksViewProps) {
   const [items, setItems] = useState<Webhook[] | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
@@ -235,6 +238,16 @@ export function WebhooksView({ t }: WebhooksViewProps) {
 
   // Per-card inline test state (event -> TestState).
   const [cardTests, setCardTests] = useState<Record<string, TestState>>({})
+  const [expandedCards, setExpandedCards] = useState<Set<WebhookEvent>>(() => new Set())
+
+  const toggleCardExpanded = useCallback((event: WebhookEvent) => {
+    setExpandedCards((prev) => {
+      const next = new Set(prev)
+      if (next.has(event)) next.delete(event)
+      else next.add(event)
+      return next
+    })
+  }, [])
 
   const refresh = useCallback(async () => {
     setLoading(true)
@@ -395,12 +408,14 @@ export function WebhooksView({ t }: WebhooksViewProps) {
   const canCreate = availableEvents.length > 0
 
   return (
-    <div className="view">
-      <div className="view-head">
-        <div>
-          <h1 className="view-title">{t.webhooksTitle}</h1>
-          <p className="view-lede">{t.webhooksLede}</p>
-        </div>
+    <div className={'view' + (embedded ? ' view--embedded' : '')}>
+      <div className={'view-head' + (embedded ? ' view-head--embedded' : '')}>
+        {!embedded ? (
+          <div>
+            <h1 className="view-title">{t.webhooksTitle}</h1>
+            <p className="view-lede">{t.webhooksLede}</p>
+          </div>
+        ) : null}
         <div className="view-head-actions">
           <button type="button" className="btn btn--quiet btn--sm" onClick={refresh}>
             <RefreshIcon width={14} height={14} />
@@ -464,8 +479,12 @@ export function WebhooksView({ t }: WebhooksViewProps) {
         <div className="webhook-list">
           {(items ?? []).map((w) => {
             const testState = cardTests[w.event] ?? { status: 'idle' }
+            const isExpanded = expandedCards.has(w.event)
             return (
-              <article key={w.event} className="webhook-card">
+              <article
+                key={w.event}
+                className={'webhook-card' + (isExpanded ? ' is-expanded' : '')}
+              >
                 <header className="webhook-card-head">
                   <div className="webhook-card-title">
                     <div className="webhook-card-title-row">
@@ -510,31 +529,52 @@ export function WebhooksView({ t }: WebhooksViewProps) {
                   </div>
                 </header>
 
-                <div className="webhook-request-line">
+                <button
+                  type="button"
+                  className="webhook-request-toggle"
+                  onClick={() => toggleCardExpanded(w.event)}
+                  aria-expanded={isExpanded}
+                  aria-label={
+                    isExpanded ? t.webhooksCollapseRequest : t.webhooksExpandRequest
+                  }
+                >
+                  <span className="webhook-request-toggle-icon" aria-hidden>
+                    {isExpanded ? (
+                      <ChevronUpIcon width={16} height={16} />
+                    ) : (
+                      <ChevronDownIcon width={16} height={16} />
+                    )}
+                  </span>
                   <span
                     className={`method-chip method-chip--${w.method.toLowerCase()} mono`}
                   >
                     {w.method}
                   </span>
-                  <span className="webhook-request-url mono">{w.url}</span>
-                </div>
+                  <span className="webhook-request-summary-url mono" title={w.url}>
+                    {w.url}
+                  </span>
+                </button>
 
-                <WebhookKvSection
-                  label={t.webhookHeadersLabel}
-                  value={w.headers}
-                />
-                <WebhookKvSection
-                  label={t.webhookQueryLabel}
-                  value={w.query_params}
-                />
-                <WebhookKvSection
-                  label={t.webhookCookiesLabel}
-                  value={w.cookies}
-                />
-                <WebhookBodySection
-                  label={t.webhookBodyLabel}
-                  value={w.body}
-                />
+                {isExpanded ? (
+                  <div className="webhook-request-details">
+                    <WebhookKvSection
+                      label={t.webhookHeadersLabel}
+                      value={w.headers}
+                    />
+                    <WebhookKvSection
+                      label={t.webhookQueryLabel}
+                      value={w.query_params}
+                    />
+                    <WebhookKvSection
+                      label={t.webhookCookiesLabel}
+                      value={w.cookies}
+                    />
+                    <WebhookBodySection
+                      label={t.webhookBodyLabel}
+                      value={w.body}
+                    />
+                  </div>
+                ) : null}
 
                 <TestFeedback state={testState} />
               </article>

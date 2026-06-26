@@ -16,22 +16,19 @@ import {
 import {
   BanIcon,
   ClockIcon,
+  CogIcon,
   GitHubIcon,
-  LogoutIcon,
   MenuIcon,
-  ServerIcon,
   ShieldIcon,
-  WebhookIcon,
 } from './icons'
 import { strings } from './i18n'
-import { useEnglishOnlyLocale, useTheme } from './hooks'
+import { useEnglishOnlyLocale, useAppearance } from './hooks'
 import { Avatar } from './components/Avatar'
 import { LoginView } from './views/Login'
-import { ServicesView } from './views/Services'
 import { PendingView } from './views/Pending'
 import { ConnectionsView } from './views/Connections'
 import { IgnoredView } from './views/Ignored'
-import { WebhooksView } from './views/Webhooks'
+import { SettingsView } from './views/Settings'
 import {
   playNewPendingConnectionSound,
   primePendingNotificationSound,
@@ -42,7 +39,7 @@ import './App.css'
 const GITHUB_URL = 'https://github.com/agamsol/Reverse-Proxy-Access-Control-Manager'
 const PENDING_POLL_MS = 2_000
 
-type Tab = 'services' | 'pending' | 'connections' | 'ignored' | 'webhooks'
+type Tab = 'pending' | 'connections' | 'ignored' | 'settings'
 
 type TabGroup = {
   id: 'access' | 'config'
@@ -50,8 +47,6 @@ type TabGroup = {
   tabs: readonly Tab[]
 }
 
-// Grouped so the sidebar shows access-management items first, then a visible
-// separator into a "configuration" cluster (services + webhooks).
 const TAB_GROUPS: readonly TabGroup[] = [
   {
     id: 'access',
@@ -61,7 +56,7 @@ const TAB_GROUPS: readonly TabGroup[] = [
   {
     id: 'config',
     labelKey: 'navGroupConfiguration',
-    tabs: ['services', 'webhooks'],
+    tabs: ['settings'],
   },
 ]
 
@@ -82,24 +77,20 @@ function useNarrowSidebar(): boolean {
 }
 
 function tabIcon(tab: Tab) {
-  // Webhook glyph has more negative space than the others; render it a
-  // hair larger so it reads at the same visual weight as Server/Clock/Shield.
   switch (tab) {
-    case 'services':
-      return <ServerIcon width={17} height={17} />
     case 'pending':
       return <ClockIcon width={17} height={17} />
     case 'connections':
       return <ShieldIcon width={17} height={17} />
     case 'ignored':
       return <BanIcon width={17} height={17} />
-    case 'webhooks':
-      return <WebhookIcon width={19} height={19} />
+    case 'settings':
+      return <CogIcon width={17} height={17} />
   }
 }
 
 export default function App() {
-  const { theme, toggle } = useTheme()
+  const { theme, toggleTheme } = useAppearance()
   useEnglishOnlyLocale()
   const t = strings.en
 
@@ -270,7 +261,7 @@ export default function App() {
 
   if (!token) {
     return (
-      <div className="app app--auth" data-theme={theme}>
+      <div className="app app--auth">
         <header className="top-bar top-bar--auth">
           <div className="brand">
             <img
@@ -285,7 +276,7 @@ export default function App() {
             <button
               type="button"
               className="theme-toggle"
-              onClick={toggle}
+              onClick={toggleTheme}
               aria-pressed={theme === 'dark'}
             >
               {theme === 'light' ? t.themeToDark : t.themeToLight}
@@ -319,7 +310,6 @@ export default function App() {
       className={
         'app app--dashboard' + (isNarrow && sidebarOpen ? ' sidebar-open' : '')
       }
-      data-theme={theme}
     >
       {isNarrow && sidebarOpen ? (
         <button
@@ -342,7 +332,10 @@ export default function App() {
             alt=""
             aria-hidden
           />
-          <span className="brand-text">{t.brand}</span>
+          <div className="sidebar-brand-copy">
+            <span className="brand-text">{t.brand}</span>
+            <span className="brand-sub">{t.brandSubtitle}</span>
+          </div>
         </div>
 
         <nav className="sidebar-nav" aria-label="Sections">
@@ -390,34 +383,13 @@ export default function App() {
 
         <div className="sidebar-foot">
           {payload ? (
-            <div className="sidebar-user" title={`${t.signedInAs} ${payload.username}`}>
-              <Avatar name={payload.username} size={36} />
+            <div className="sidebar-user" title={payload.username}>
+              <Avatar name={payload.username} size={34} />
               <div className="sidebar-user-meta">
-                <span className="sidebar-user-label">{t.signedInAs}</span>
                 <span className="sidebar-user-name">{payload.username}</span>
               </div>
             </div>
           ) : null}
-          <div className="sidebar-controls">
-            <button
-              type="button"
-              className="theme-toggle"
-              onClick={toggle}
-              aria-pressed={theme === 'dark'}
-              title={theme === 'light' ? t.themeToDark : t.themeToLight}
-            >
-              {theme === 'light' ? t.themeToDark : t.themeToLight}
-            </button>
-          </div>
-          <button
-            type="button"
-            className="btn btn--danger-soft btn--sm sidebar-logout"
-            onClick={onLogout}
-            title={t.logout}
-          >
-            <LogoutIcon width={14} height={14} />
-            <span>{t.logout}</span>
-          </button>
         </div>
       </aside>
 
@@ -447,13 +419,14 @@ export default function App() {
         ) : null}
 
         <main className="main-shell">
-          {activeTab === 'services' && <ServicesView t={t} />}
           {activeTab === 'pending' && (
             <PendingView t={t} lang="en" onPendingChanged={refreshPendingCount} />
           )}
           {activeTab === 'connections' && <ConnectionsView t={t} lang="en" />}
           {activeTab === 'ignored' && <IgnoredView t={t} />}
-          {activeTab === 'webhooks' && <WebhooksView t={t} />}
+          {activeTab === 'settings' && (
+            <SettingsView t={t} username={payload?.username ?? null} onLogout={onLogout} />
+          )}
         </main>
 
         <footer className="site-footer">
@@ -475,15 +448,13 @@ export default function App() {
 
 function tabLabel(tab: Tab, t: typeof strings['en']): string {
   switch (tab) {
-    case 'services':
-      return t.navServices
     case 'pending':
       return t.navPending
     case 'connections':
       return t.navConnections
     case 'ignored':
       return t.navIgnored
-    case 'webhooks':
-      return t.navWebhooks
+    case 'settings':
+      return t.navSettings
   }
 }

@@ -45,7 +45,7 @@ export type RequestAccessResponse = {
 }
 
 export type RequestAccessBlock = {
-  code: 'connection_ignored' | 'connection_revoked'
+  code: 'connection_ignored'
   services: string[]
 }
 
@@ -81,10 +81,7 @@ function extractRequestAccessBlock(data: unknown): RequestAccessBlock | null {
   if (!detail || typeof detail !== 'object' || Array.isArray(detail)) return null
   const o = detail as { code?: unknown; services?: unknown }
   const code = o.code
-  if (
-    (code === 'connection_ignored' || code === 'connection_revoked') &&
-    Array.isArray(o.services)
-  ) {
+  if (code === 'connection_ignored' && Array.isArray(o.services)) {
     const out = o.services.filter((x): x is string => typeof x === 'string')
     if (out.length === 0) return null
     return { code: code as RequestAccessBlock['code'], services: out }

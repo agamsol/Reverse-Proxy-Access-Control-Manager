@@ -52,7 +52,6 @@ class MongoDb:
         self.allowed_collection_name = "allowed_connections"
         self.ignored_collection_name = "ignored_collection"
         self.webhooks_collection_name = "webhooks"
-        self.revoked_collection_name = "revoked_connections"
 
     def connect(
         self,
@@ -129,43 +128,6 @@ class MongoDb:
         available_services = cursor.to_list(length=None)
 
         return available_services
-
-    def _record_connection_revoked(self, deleted_allowed_document: dict | None) -> None:
-        """Persist (ip, service) so the public guest API can refuse new pending requests until an admin grants again."""
-        if not deleted_allowed_document:
-            return
-        ip_str = str(deleted_allowed_document.get("ip_address") or "")
-        service_name = deleted_allowed_document.get("service_name")
-        if not ip_str or not service_name:
-            return
-        now = datetime.now(timezone.utc)
-        self.database[self.revoked_collection_name].update_one(
-            {"ip_address": ip_str, "service_name": service_name},
-            {
-                "$set": {
-                    "ip_address": ip_str,
-                    "service_name": service_name,
-                    "revoked_at": now,
-                }
-            },
-            upsert=True,
-        )
-
-    def _clear_revocation_block(self, ip_str: str, service_name: str) -> None:
-        if not ip_str or not service_name:
-            return
-        self.database[self.revoked_collection_name].delete_many(
-            {"ip_address": ip_str, "service_name": service_name}
-        )
-
-    async def is_connection_revoked_for_service(self, ip_str: str, service_name: str) -> bool:
-        ips = _client_ip_query_variants(ip_str)
-        if not ips or not service_name:
-            return False
-        doc = self.database[self.revoked_collection_name].find_one(
-            {"ip_address": {"$in": ips}, "service_name": service_name}
-        )
-        return doc is not None
 
     async def is_connection_ignored_for_service(self, ip_str: str, service_name: str) -> bool:
         """True when an admin denied a pending request with "also block this IP" for this service."""
@@ -368,8 +330,6 @@ class MongoDb:
         doc["ip_address"] = str(doc["ip_address"])
         allowed_collection.insert_one(doc)
 
-        self._clear_revocation_block(ip_str, service_name)
-
         return allowed_connection_payload
 
     async def create_allowed_connection_admin(
@@ -415,7 +375,6 @@ class MongoDb:
         doc["ip_address"] = str(doc["ip_address"])
         result = allowed_collection.insert_one(doc)
         inserted = allowed_collection.find_one({"_id": result.inserted_id})
-        self._clear_revocation_block(ip_str, service_name)
         return AllowedConnectionModel.model_validate(inserted)
 
     async def deny_pending_connection(self, connection_id: MongoID, ignore_connection=False):
@@ -448,8 +407,6 @@ class MongoDb:
         deleted_document: dict = self.database[self.allowed_collection_name].find_one_and_delete(
             filter={"_id": ObjectId(connection_id)}
         )
-
-        self._record_connection_revoked(deleted_document)
 
         return deleted_document
 

@@ -6,7 +6,7 @@ from dotenv import load_dotenv
 from fastapi import FastAPI, Request, Depends, status, HTTPException
 from fastapi.responses import FileResponse
 from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
-from routes import service, auth, pending, connection, webhook
+from routes import service, auth, pending, connection, webhook, config
 from models.auth_models import oauth2_token_scheme
 from common_custom.utils.pydantic.health_models import StatusResponseModel
 
@@ -77,6 +77,11 @@ app.include_router(
 
 app.include_router(
     router=webhook.router,
+    dependencies=[Depends(oauth2_token_scheme)]
+)
+
+app.include_router(
+    router=config.router,
     dependencies=[Depends(oauth2_token_scheme)]
 )
 

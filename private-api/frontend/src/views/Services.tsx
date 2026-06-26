@@ -25,6 +25,7 @@ import { fmt } from '../format'
 
 type ServicesViewProps = {
   t: Messages
+  embedded?: boolean
 }
 
 type ServiceDraft = {
@@ -80,7 +81,7 @@ function matchesQuery(s: ServiceInfo, q: string): boolean {
   )
 }
 
-export function ServicesView({ t }: ServicesViewProps) {
+export function ServicesView({ t, embedded = false }: ServicesViewProps) {
   const [items, setItems] = useState<ServiceInfo[] | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
@@ -215,12 +216,14 @@ export function ServicesView({ t }: ServicesViewProps) {
   }
 
   return (
-    <div className="view">
-      <div className="view-head">
-        <div>
-          <h1 className="view-title">{t.servicesTitle}</h1>
-          <p className="view-lede">{t.servicesLede}</p>
-        </div>
+    <div className={'view' + (embedded ? ' view--embedded' : '')}>
+      <div className={'view-head' + (embedded ? ' view-head--embedded' : '')}>
+        {!embedded ? (
+          <div>
+            <h1 className="view-title">{t.servicesTitle}</h1>
+            <p className="view-lede">{t.servicesLede}</p>
+          </div>
+        ) : null}
         <div className="view-head-actions">
           <button type="button" className="btn btn--quiet btn--sm" onClick={refresh}>
             <RefreshIcon width={14} height={14} />

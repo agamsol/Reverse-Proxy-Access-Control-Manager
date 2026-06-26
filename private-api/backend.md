@@ -296,7 +296,7 @@ Deny a pending connection request, optionally ignoring the IP to prevent future 
 
 **Side Effects:**
 - Triggers `pending.denied` webhook event.
-- If `ignore_connection` is `true`, adds the IP to the ignored connections list.
+- If `ignore_connection` is `true`, adds the IP to MongoDB `ignored_collection`. While that row exists, `POST /request-access` on the public API returns **403** with `code: connection_ignored` for that IP + service pair.
 
 ---
 
@@ -362,6 +362,8 @@ Revoke access for a specific allowed connection.
 **Response:** `AllowedConnectionModel`
 
 **Side Effects:**
+- Removes the document from `allowed_connections` (active proxy access ends when the proxy listener refreshes its allow list).
+- Does **not** add the IP to `ignored_collection`; the client may submit a new access request immediately unless separately blocked.
 - Triggers `connection.revoked` webhook event.
 
 ---
@@ -507,6 +509,48 @@ All fields from `HTTPRequest` plus:
 
 ---
 
+## Configuration
+
+All endpoints in this section require a Bearer token.
+
+Settings are stored in `data/contact-fields.json` on disk. Updates via the private API take effect immediately on the public API (each guest request re-reads the file).
+
+### `GET /config/get-contact-fields`
+
+Get the current guest access form contact field settings.
+
+**Response** `ContactFieldsConfigResponseModel`:
+
+| Field | Type | Description |
+|---|---|---|
+| `name` | `ContactFieldFlagsModel` | Name field settings |
+| `email` | `ContactFieldFlagsModel` | Email field settings |
+| `phone_number` | `ContactFieldFlagsModel` | Phone field settings |
+
+`ContactFieldFlagsModel`:
+
+| Field | Type | Description |
+|---|---|---|
+| `visible` | `bool` | If `true`, the field is shown on the public access form |
+| `required` | `bool` | If `true` and `visible` is `true`, the field is mandatory on `POST /request-access` |
+
+---
+
+### `PUT /config/update-contact-fields`
+
+Replace the contact field settings written to `data/contact-fields.json`.
+
+**Request Body** `ContactFieldsConfigResponseModel` (JSON):
+
+Same shape as the GET response. If `visible` is `false`, `required` is stored as `false` regardless of the submitted value.
+
+**Response:** `ContactFieldsConfigResponseModel`
+
+**Errors:**
+- `422 Unprocessable Entity` — Validation errors (e.g. `required: true` with `visible: false`).
+
+---
+
 ## Endpoint Summary
 
 | Auth | Method | Path | Description |
@@ -530,5 +574,7 @@ All fields from `HTTPRequest` plus:
 | Yes | `POST` | `/webhook/add-webhook` | Create a webhook |
 | Yes | `DELETE` | `/webhook/remove-webhook` | Remove a webhook |
 | Yes | `PATCH` | `/webhook/modify-webhook` | Modify a webhook |
+| Yes | `GET` | `/config/get-contact-fields` | Get guest contact field settings |
+| Yes | `PUT` | `/config/update-contact-fields` | Update guest contact field settings |
 
-**Total: 19 endpoints** (2 public, 17 protected by Bearer token)
+**Total: 21 endpoints** (2 public, 19 protected by Bearer token)

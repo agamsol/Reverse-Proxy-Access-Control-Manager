@@ -62,8 +62,6 @@ const en = {
   errDuration:
     'The access end time must be in the future. Clear the field or pick a later date and time.',
   errRequiredContact: 'Please fill in the required contact fields: {fields}.',
-  errRevokedAccess:
-    'Access for your address to these services was revoked and new requests are blocked until an administrator restores access: {services}.',
   accessConflictModalTitle: 'Request not needed',
   accessConflictModalLede:
     'From this network address there is already a pending approval request and/or active access for the services below. You cannot submit a duplicate request for those services.',

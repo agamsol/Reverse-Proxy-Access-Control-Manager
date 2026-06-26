@@ -129,18 +129,6 @@ Submit a request for access to one or more services. For each requested service 
     }
     ```
 
-    **`connection_revoked`** — Access was **revoked** for that IP + service (`revoked_connections`). The block is removed when an administrator grants access again (accept pending or admin grant).
-
-    ```json
-    {
-      "code": "connection_revoked",
-      "services": ["service-a", "service-b"],
-      "message": "Access for your network address to the following service(s) was revoked by an administrator. You cannot submit a new access request until access is granted again."
-    }
-    ```
-
-    If both conditions apply to different services in the same request, **`connection_ignored` is returned first** (only the ignored subset appears in `services`).
-
 - `409 Conflict` — The client already has a **pending** request and/or an **active allowed** connection for one or more of the requested services. No new pending rows are created. The `detail` object includes:
 
     **`request_access_conflict`** — Lists affected catalog names in `already_pending` and/or `already_allowed` (each may be an empty array; at least one list is non-empty).
@@ -166,8 +154,9 @@ Submit a request for access to one or more services. For each requested service 
 **Side Effects:**
 
 - For each valid service in `services`, creates a pending connection (MongoDB) and may invoke the `pending.new` webhook if configured.
-- **`403` pre-checks:** requests are rejected when the client IP + service matches an **ignored** row (`ignored_collection`, from “deny and block IP”) or a **revoked** row (`revoked_connections`, from revoking an allowed connection). IP matching treats `127.0.0.1` and `::ffff:127.0.0.1` as the same client where applicable.
-- When an administrator **revokes** an allowed connection, the server records that **IP + service** pair in MongoDB (`revoked_connections`). While that record exists, `POST /request-access` returns **403** with `code: connection_revoked` for that pair. The block is removed when access is granted again (pending accept or admin grant).
+- **`403` pre-check:** requests are rejected when the client IP + service matches an **ignored** row (`ignored_collection`, from “deny and block IP”). IP matching treats `127.0.0.1` and `::ffff:127.0.0.1` as the same client where applicable.
+- **Contact fields:** required-field validation uses the current contents of `data/contact-fields.json` (same source as `GET /config/contact-fields`).
+- Revoking an allowed connection (`DELETE /connection/revoke/{id}` on the private API) removes active access only; it does **not** block future access requests. To block new requests from an IP, an administrator must deny a pending request with “also block this IP” (`ignored_collection`).
 
 ---
 
@@ -175,7 +164,7 @@ Submit a request for access to one or more services. For each requested service 
 
 ### `GET /config/contact-fields`
 
-Get the per-field `visible` and `required` settings for the name, email, and phone inputs on the access-request form. The values come from `data/contact-fields.json` at service start-up: `visible: false` hides a field; when `visible: true`, `required: true` shows a `*` in the UI and is enforced; `visible: true` and `required: false` means the field is shown as optional. The same rules are applied server-side on `POST /request-access` (only fields that are both visible and required are validated for non-empty input).
+Get the per-field `visible` and `required` settings for the name, email, and phone inputs on the access-request form. Values are read from `data/contact-fields.json` on each request. Administrators update this file via the private API (`PUT /config/update-contact-fields`); changes apply immediately without restarting the public API.
 
 **Auth:** None
 
@@ -201,7 +190,8 @@ For each of `name`, `email`, and `phone_number`, the value is a `ContactFieldFla
 
 **Notes:**
 
-- The file is read once at service start-up; changes to `data/contact-fields.json` require a restart to take effect.
+- `visible: false` hides a field from the form; when `visible: true`, `required: true` shows a `*` in the UI and is enforced on `POST /request-access`.
+- The file is re-read on each `GET /config/contact-fields` and each `POST /request-access` validation. Updates made through the private admin API take effect immediately.
 - **Legacy format:** a bare boolean for a field (e.g. `"name": true`) is still accepted and means `{ "visible": true, "required": <bool> }`.
 - For each missing field, the default is `{ "visible": true, "required": false }`. An absent or malformed file uses that default for all three fields.
 
