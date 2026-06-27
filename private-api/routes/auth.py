@@ -5,24 +5,12 @@ from pathlib import Path
 from dotenv import load_dotenv
 from typing import Annotated
 from fastapi import APIRouter, status, HTTPException, Depends
-from common_custom.controllers.mongodb import MongoDb
 from models.auth_models import LoginRequestModel, LoginResponseModel, TokenPayloadModel, AuthenticatedUserResponseModel, get_login_form, oauth2_token_scheme
 
 DATA_DIR = (Path(__file__).resolve().parents[2] / "data").resolve()
 
 load_dotenv(DATA_DIR / ".env")
 load_dotenv(DATA_DIR / "private.env")
-
-mongodb_helper = MongoDb(
-    database_name=os.getenv("MONGODB_DATABASE")
-)
-
-mongodb = mongodb_helper.connect(
-    host=os.getenv("MONGODB_HOST"),
-    port=int(os.getenv("MONGODB_PORT")),
-    username=os.getenv("MONGODB_USERNAME"),
-    password=os.getenv("MONGODB_PASSWORD")
-)
 
 router = APIRouter(
     prefix="/auth",

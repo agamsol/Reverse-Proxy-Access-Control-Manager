@@ -214,7 +214,7 @@ Submit a request for access to one or more services. For each requested service 
 - `400 Bad Request` — No requested service names matched services in the database (`"No valid services were requested."`).
 - `403 Forbidden` — The client IP may not submit a pending request for one or more requested services. The `detail` object always includes `code`, `services` (affected catalog names), and `message`:
 
-    **`connection_ignored`** — An administrator denied a prior request with “also block this IP” for that service (MongoDB `ignored_collection`). The block is removed when an administrator un-ignores the address from the private admin UI.
+    **`connection_ignored`** — An administrator denied a prior request with “also block this IP” for that service (the `ignored_collection` table in SQLite). The block is removed when an administrator un-ignores the address from the private admin UI.
 
     ```json
     {
@@ -248,7 +248,7 @@ Submit a request for access to one or more services. For each requested service 
 
 **Side Effects:**
 
-- For each valid service in `services`, creates a pending connection (MongoDB) and may invoke the `pending.new` webhook if configured.
+- For each valid service in `services`, creates a pending connection (persisted in SQLite) and may invoke the `pending.new` webhook if configured.
 - **`403` pre-check:** requests are rejected when the client IP + service matches an **ignored** row (`ignored_collection`, from “deny and block IP”). IP matching treats `127.0.0.1` and `::ffff:127.0.0.1` as the same client where applicable.
 - **Contact fields:** required-field validation uses the current contents of `data/contact-fields.json` (same source as `GET /config/contact-fields`).
 - Revoking an allowed connection (`DELETE /connection/revoke/{id}` on the private API) removes active access only; it does **not** block future access requests. To block new requests from an IP, an administrator must deny a pending request with “also block this IP” (`ignored_collection`).

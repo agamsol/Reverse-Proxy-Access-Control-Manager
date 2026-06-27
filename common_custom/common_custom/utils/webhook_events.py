@@ -2,7 +2,7 @@ import os
 import time
 from pathlib import Path
 from dotenv import load_dotenv
-from common_custom.controllers.mongodb import MongoDb
+from common_custom.controllers.database import Database
 from common_custom.utils.pydantic.webhook_models import HTTPRequest, WebhookValidator
 from common_custom.controllers.pydantic.allowed_models import AllowedConnectionModel
 
@@ -10,18 +10,11 @@ DATA_DIR = (Path(__file__).resolve().parents[3] / "data").resolve()
 
 load_dotenv(DATA_DIR / ".env")
 
-mongodb_helper = MongoDb(
-    database_name=os.getenv("MONGODB_DATABASE")
+mongodb_helper = Database(
+    db_path=os.getenv("SQLITE_DB_PATH") or str(DATA_DIR / "app.db")
 )
 
-mongodb = mongodb_helper.connect(
-    host=os.getenv("MONGODB_HOST"),
-    port=int(os.getenv("MONGODB_PORT")),
-    username=os.getenv("MONGODB_USERNAME"),
-    password=os.getenv("MONGODB_PASSWORD")
-)
-
-webhooks_collection = mongodb_helper.database[mongodb_helper.webhooks_collection_name]
+mongodb_helper.connect()
 
 
 class Events:

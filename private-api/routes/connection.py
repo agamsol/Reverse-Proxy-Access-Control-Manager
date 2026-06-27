@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 from dotenv import load_dotenv
 from common_custom.utils.webhook_events import Events
 from fastapi import APIRouter, status
-from common_custom.controllers.mongodb import MongoDb
+from common_custom.controllers.database import Database
 from common_custom.controllers.validators import MongoID
 from common_custom.controllers.pydantic.allowed_models import (
     AdminCreateAllowedConnectionRequestModel,
@@ -18,20 +18,15 @@ DATA_DIR = (Path(__file__).resolve().parents[2] / "data").resolve()
 load_dotenv(DATA_DIR / ".env")
 
 
-mongodb_helper = MongoDb(
-    database_name=os.getenv("MONGODB_DATABASE")
+mongodb_helper = Database(
+    db_path=os.getenv("SQLITE_DB_PATH") or str(DATA_DIR / "app.db")
 )
 
-mongodb = mongodb_helper.connect(
-    host=os.getenv("MONGODB_HOST"),
-    port=int(os.getenv("MONGODB_PORT")),
-    username=os.getenv("MONGODB_USERNAME"),
-    password=os.getenv("MONGODB_PASSWORD")
-)
+mongodb_helper.connect()
 
-services = mongodb_helper.database[mongodb_helper.services_collection_name]
-allowed_connections = mongodb_helper.database[mongodb_helper.allowed_collection_name]
-ignored_connections = mongodb_helper.database[mongodb_helper.ignored_collection_name]
+services = mongodb_helper.services_collection_name
+allowed_connections = mongodb_helper.allowed_collection_name
+ignored_connections = mongodb_helper.ignored_collection_name
 
 router = APIRouter(
     prefix="/connection",
@@ -48,8 +43,8 @@ router = APIRouter(
 )
 async def get_all_connections():
 
-    connections = await mongodb_helper.get_all_documents(collection=allowed_connections)
-    all_services = await mongodb_helper.get_all_documents(collection=services)
+    connections = await mongodb_helper.get_all_documents(table_name=allowed_connections)
+    all_services = await mongodb_helper.get_all_documents(table_name=services)
 
     valid_service_names = {service["name"] for service in all_services}
     now = datetime.now(timezone.utc).replace(tzinfo=None)
@@ -106,7 +101,7 @@ async def update_allowed_connection(id: MongoID, body: AdminUpdateAllowedConnect
 )
 async def revoke_connection(id: MongoID):
 
-    document_payload = await mongodb_helper.get_document(document_id=id, collection=allowed_connections)
+    document_payload = await mongodb_helper.get_document(document_id=id, table_name=allowed_connections)
 
     await mongodb_helper.revoke_connection(connection_id=id)
 
@@ -123,7 +118,7 @@ async def revoke_connection(id: MongoID):
 )
 async def show_all_ignored_connections():
 
-    all_ignored_connections = await mongodb_helper.get_all_documents(collection=ignored_connections)
+    all_ignored_connections = await mongodb_helper.get_all_documents(table_name=ignored_connections)
 
     return all_ignored_connections
 
@@ -136,7 +131,7 @@ async def show_all_ignored_connections():
 )
 async def unignore_connection(id: MongoID):
 
-    ignored_document = await mongodb_helper.get_document(document_id=id, collection=ignored_connections)
+    ignored_document = await mongodb_helper.get_document(document_id=id, table_name=ignored_connections)
 
     await mongodb_helper.unignore_connection(connection_id=id)
 

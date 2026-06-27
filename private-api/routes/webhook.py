@@ -3,7 +3,7 @@ from dotenv import load_dotenv
 from typing import Literal, Optional  # NOQA: F401
 from fastapi import APIRouter, status, HTTPException, Request, Depends, Form, Path  # NOQA: F401
 from pydantic import BaseModel, Field, IPvAnyAddress, BeforeValidator, AfterValidator  # NOQA: F401
-from common_custom.controllers.mongodb import MongoDb
+from common_custom.controllers.database import Database
 from common_custom.utils.pydantic.webhook_models import (
     HTTPRequest,
     CreateWebhookResponseModel,
@@ -17,18 +17,13 @@ DATA_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "
 
 load_dotenv(os.path.join(DATA_DIR, ".env"))
 
-mongodb_helper = MongoDb(
-    database_name=os.getenv("MONGODB_DATABASE")
+mongodb_helper = Database(
+    db_path=os.getenv("SQLITE_DB_PATH") or os.path.join(DATA_DIR, "app.db")
 )
 
-mongodb = mongodb_helper.connect(
-    host=os.getenv("MONGODB_HOST"),
-    port=int(os.getenv("MONGODB_PORT")),
-    username=os.getenv("MONGODB_USERNAME"),
-    password=os.getenv("MONGODB_PASSWORD")
-)
+mongodb_helper.connect()
 
-webhooks_collection = mongodb_helper.database[mongodb_helper.webhooks_collection_name]
+webhooks_collection = mongodb_helper.webhooks_collection_name
 
 router = APIRouter(
     prefix="/webhook",
@@ -45,7 +40,7 @@ router = APIRouter(
 )
 async def get_all_webhooks():
 
-    webhook_documents = await mongodb_helper.get_all_documents(collection=webhooks_collection)
+    webhook_documents = await mongodb_helper.get_all_documents(table_name=webhooks_collection)
 
     return webhook_documents
 

@@ -29,6 +29,11 @@ MANIFEST
 data/.env
 data/private.env
 
+# SQLite database (and WAL/SHM sidecar files) created at runtime
+data/app.db
+data/app.db-wal
+data/app.db-shm
+
 # PyInstaller
 #  Usually these files are written by a python script from a template
 #  before PyInstaller builds the exe, so as to inject date/other infos into it.

@@ -191,7 +191,7 @@ List all pending connection requests.
 
 | Field | Type | Required | Description |
 |---|---|---|---|
-| `_id` | `MongoID` \| `null` | No | 24-char hex ObjectId |
+| `_id` | `MongoID` \| `null` | No | 24-char hex string |
 | `contact_methods` | `ContactMethodsModel` | Yes | Requester's contact info |
 | `ip_address` | `IPvAnyAddress` | Yes | Requester's IP address |
 | `service` | `ServiceItem` \| `null` | No | Requested service |
@@ -300,7 +300,7 @@ Deny a pending connection request, optionally ignoring the IP to prevent future 
 
 **Side Effects:**
 - Triggers `pending.denied` webhook event.
-- If `ignore_connection` is `true`, adds the IP to MongoDB `ignored_collection`. While that row exists, `POST /request-access` on the public API returns **403** with `code: connection_ignored` for that IP + service pair.
+- If `ignore_connection` is `true`, adds the IP to the `ignored_collection` table. While that row exists, `POST /request-access` on the public API returns **403** with `code: connection_ignored` for that IP + service pair.
 
 ---
 

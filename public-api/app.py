@@ -5,7 +5,7 @@ from pathlib import Path
 from urllib.parse import urlparse
 from dotenv import load_dotenv
 from pydantic import BaseModel, IPvAnyAddress, Field
-from common_custom.controllers.mongodb import MongoDb
+from common_custom.controllers.database import Database
 from common_custom.utils.webhook_events import Events
 from common_custom.utils.contact_fields import (
     contact_fields_to_response,
@@ -34,18 +34,11 @@ ensure_contact_fields_file(CONTACT_FIELDS_PATH)
 SERVICE_VERSION = os.getenv("SERVICE_VERSION")
 SERVICE_UNDER_MAINTENANCE = os.getenv("SERVICE_UNDER_MAINTENANCE") == 'True'
 
-mongodb_helper = MongoDb(
-    database_name=os.getenv("MONGODB_DATABASE")
+mongodb_helper = Database(
+    db_path=os.getenv("SQLITE_DB_PATH") or str(DATA_DIR / "app.db")
 )
 
-mongodb = mongodb_helper.connect(
-    host=os.getenv("MONGODB_HOST"),
-    port=int(os.getenv("MONGODB_PORT")),
-    username=os.getenv("MONGODB_USERNAME"),
-    password=os.getenv("MONGODB_PASSWORD")
-)
-
-services_collection = mongodb_helper.database["services"]
+mongodb_helper.connect()
 
 STATIC_ROOT = (Path(__file__).resolve().parent / "frontend" / "dist").resolve()
 
@@ -166,7 +159,7 @@ async def request_access_landing(access_request: AccessRequest, request: Request
 
     if user_requested_services is not None:
 
-        valid_service_names = set(services_collection.distinct("name"))
+        valid_service_names = set(await mongodb_helper.list_service_names())
 
         ignored_services: list[str] = []
         for service in user_requested_services:

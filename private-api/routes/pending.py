@@ -4,7 +4,7 @@ from dotenv import load_dotenv
 from fastapi import APIRouter, status, Body
 from typing import Optional
 from common_custom.utils.webhook_events import Events
-from common_custom.controllers.mongodb import MongoDb
+from common_custom.controllers.database import Database
 from common_custom.controllers.validators import MongoID
 from common_custom.controllers.pydantic.allowed_models import AllowedConnectionModel, DeniedSuccessResponseModel
 from common_custom.controllers.pydantic.pending_models import (
@@ -18,16 +18,11 @@ DATA_DIR = (Path(__file__).resolve().parents[2] / "data").resolve()
 load_dotenv(DATA_DIR / ".env")
 
 
-mongodb_helper = MongoDb(
-    database_name=os.getenv("MONGODB_DATABASE")
+mongodb_helper = Database(
+    db_path=os.getenv("SQLITE_DB_PATH") or str(DATA_DIR / "app.db")
 )
 
-mongodb = mongodb_helper.connect(
-    host=os.getenv("MONGODB_HOST"),
-    port=int(os.getenv("MONGODB_PORT")),
-    username=os.getenv("MONGODB_USERNAME"),
-    password=os.getenv("MONGODB_PASSWORD")
-)
+mongodb_helper.connect()
 
 router = APIRouter(
     prefix="/pending",

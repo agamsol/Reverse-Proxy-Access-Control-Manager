@@ -3,7 +3,7 @@ from dotenv import load_dotenv
 from typing import Literal, Optional  # NOQA: F401
 from fastapi import APIRouter, status, HTTPException, Request, Depends, Form, Path  # NOQA: F401
 from pydantic import BaseModel, Field, IPvAnyAddress, BeforeValidator, AfterValidator  # NOQA: F401
-from common_custom.controllers.mongodb import MongoDb
+from common_custom.controllers.database import Database
 from common_custom.controllers.pydantic.service_models import ServiceResponseModel
 
 DATA_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "data"))
@@ -11,16 +11,11 @@ DATA_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "
 load_dotenv(os.path.join(DATA_DIR, ".env"))
 
 
-mongodb_helper = MongoDb(
-    database_name=os.getenv("MONGODB_DATABASE")
+mongodb_helper = Database(
+    db_path=os.getenv("SQLITE_DB_PATH") or os.path.join(DATA_DIR, "app.db")
 )
 
-mongodb = mongodb_helper.connect(
-    host=os.getenv("MONGODB_HOST"),
-    port=int(os.getenv("MONGODB_PORT")),
-    username=os.getenv("MONGODB_USERNAME"),
-    password=os.getenv("MONGODB_PASSWORD")
-)
+mongodb_helper.connect()
 
 router = APIRouter(
     prefix="/service",

@@ -214,7 +214,7 @@ List all pending connection requests.
 
 | Field             | Type                   | Required | Description                             |
 | ----------------- | ---------------------- | -------- | --------------------------------------- |
-| `_id`             | `MongoID` | `null`     | No       | 24-char hex ObjectId                    |
+| `_id`             | `MongoID` | `null`     | No       | 24-char hex string                      |
 | `contact_methods` | `ContactMethodsModel`  | Yes      | Requester's contact info                |
 | `ip_address`      | `IPvAnyAddress`        | Yes      | Requester's IP address                  |
 | `service`         | `ServiceItem` | `null` | No       | Requested service                       |
