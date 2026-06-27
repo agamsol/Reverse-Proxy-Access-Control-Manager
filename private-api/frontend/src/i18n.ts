@@ -150,6 +150,8 @@ const en = {
     'Active grants. Revoking an entry immediately stops the proxy from forwarding the IP to the service.',
   connectionsAddBtn: 'Add new connection',
   connectionsAddTitle: 'Grant access',
+  connectionsEditTitle: 'Edit connection',
+  connectionsEditContactHint: 'Update contact details shown on this grant.',
   connectionsAddIpLabel: 'IP address',
   connectionsAddIpHint: 'IPv4 or IPv6 address to allow for the selected service.',
   connectionsAddServiceLabel: 'Service',

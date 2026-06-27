@@ -148,6 +148,7 @@ GET /check-access?redirect=https%3A%2F%2Fcdn.example.com%2F
 
 - IP matching treats `127.0.0.1` and `::ffff:127.0.0.1` as the same client where applicable (same as `POST /request-access`).
 - Only the **matched** service is checked; a pending request for another service does not affect this result.
+- `has_access` is `true` only when a row exists in `allowed_connections` for this IP + service and `ExpireAt` is `null` or still in the future. Administrators can change contact metadata and `ExpireAt` via `PATCH /connection/edit/{id}` on the **private API** (IP and service are fixed on that endpoint); the next `GET /check-access` call reflects the updated expiry.
 
 ---
 
@@ -251,6 +252,7 @@ Submit a request for access to one or more services. For each requested service 
 - **`403` pre-check:** requests are rejected when the client IP + service matches an **ignored** row (`ignored_collection`, from “deny and block IP”). IP matching treats `127.0.0.1` and `::ffff:127.0.0.1` as the same client where applicable.
 - **Contact fields:** required-field validation uses the current contents of `data/contact-fields.json` (same source as `GET /config/contact-fields`).
 - Revoking an allowed connection (`DELETE /connection/revoke/{id}` on the private API) removes active access only; it does **not** block future access requests. To block new requests from an IP, an administrator must deny a pending request with “also block this IP” (`ignored_collection`).
+- Updating an allowed connection (`PATCH /connection/edit/{id}` on the private API) changes stored contact fields and `ExpireAt` only; it does not change IP or service, does not create or remove pending rows, and does not trigger webhooks. After expiry is shortened or cleared, `GET /check-access` may return `has_access: false` even though the row still exists until the proxy allow list is refreshed.
 
 ---
 

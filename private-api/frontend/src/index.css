@@ -11,6 +11,7 @@
   --danger: #b91c1c;
   --danger-muted: #dc2626;
   --success: #16a34a;
+  --success-muted: #15803d;
   --warn-bg: #fff7ed;
   --warn-border: #fdba74;
   --shadow: 0 1px 2px rgba(15, 23, 42, 0.06);
@@ -38,6 +39,7 @@
   --danger: #f87171;
   --danger-muted: #fca5a5;
   --success: #4ade80;
+  --success-muted: #86efac;
   --warn-bg: #2a1f14;
   --warn-border: #9a3412;
   --shadow: 0 1px 3px rgba(0, 0, 0, 0.35);

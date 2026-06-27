@@ -1,7 +1,7 @@
 from bson import ObjectId
 from typing import Literal
 from fastapi import HTTPException
-from pymongo import ASCENDING, MongoClient, database
+from pymongo import ASCENDING, MongoClient, ReturnDocument, database
 from pymongo.collection import Collection
 from datetime import datetime, timedelta, timezone
 from common_custom.controllers.validators import MongoID
@@ -376,6 +376,50 @@ class MongoDb:
         result = allowed_collection.insert_one(doc)
         inserted = allowed_collection.find_one({"_id": result.inserted_id})
         return AllowedConnectionModel.model_validate(inserted)
+
+    async def update_allowed_connection(
+        self,
+        connection_id: MongoID,
+        *,
+        contact_methods: ContactMethodsModel,
+        expiry_minutes: int | None,
+        expire_at: datetime | None = None,
+    ) -> AllowedConnectionModel:
+
+        allowed_collection = self.database[self.allowed_collection_name]
+        existing = allowed_collection.find_one({"_id": ObjectId(connection_id)})
+        if existing is None:
+            raise HTTPException(
+                status_code=404,
+                detail="The specified connection ID was not found",
+            )
+
+        if expire_at is not None:
+            at = expire_at
+            if at.tzinfo is None:
+                connection_expiry = at.replace(tzinfo=timezone.utc)
+            else:
+                connection_expiry = at.astimezone(timezone.utc)
+        elif expiry_minutes is not None:
+            connection_expiry = datetime.now(timezone.utc) + timedelta(minutes=expiry_minutes)
+        else:
+            connection_expiry = None
+
+        expire_value = (
+            connection_expiry.replace(tzinfo=None) if connection_expiry is not None else None
+        )
+
+        updated = allowed_collection.find_one_and_update(
+            filter={"_id": ObjectId(connection_id)},
+            update={
+                "$set": {
+                    "contact_methods": contact_methods.model_dump(mode="json"),
+                    "ExpireAt": expire_value,
+                }
+            },
+            return_document=ReturnDocument.AFTER,
+        )
+        return AllowedConnectionModel.model_validate(updated)
 
     async def deny_pending_connection(self, connection_id: MongoID, ignore_connection=False):
 

@@ -19,7 +19,9 @@ import {
   CogIcon,
   GitHubIcon,
   MenuIcon,
+  MoonIcon,
   ShieldIcon,
+  SunIcon,
 } from './icons'
 import { strings } from './i18n'
 import { useEnglishOnlyLocale, useAppearance } from './hooks'
@@ -278,8 +280,14 @@ export default function App() {
               className="theme-toggle"
               onClick={toggleTheme}
               aria-pressed={theme === 'dark'}
+              aria-label={theme === 'light' ? t.themeToDark : t.themeToLight}
+              title={theme === 'light' ? t.themeToDark : t.themeToLight}
             >
-              {theme === 'light' ? t.themeToDark : t.themeToLight}
+              {theme === 'light' ? (
+                <MoonIcon width={18} height={18} />
+              ) : (
+                <SunIcon width={18} height={18} />
+              )}
             </button>
           </div>
         </header>

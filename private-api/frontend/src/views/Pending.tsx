@@ -365,7 +365,7 @@ export function PendingView({ t, lang, onPendingChanged }: PendingViewProps) {
             <button
               type="submit"
               form="accept-pending-form"
-              className="btn btn--primary"
+              className="btn btn--accept"
               disabled={
                 acceptSubmitting ||
                 acceptCatalog === null ||
@@ -626,7 +626,7 @@ function PendingCard({
         <div className="record-card-actions">
           <button
             type="button"
-            className="btn btn--primary btn--sm"
+            className="btn btn--accept btn--sm"
             onClick={onAccept}
             title={t.shiftSkipAccept}
           >

@@ -8,6 +8,7 @@ from common_custom.controllers.mongodb import MongoDb
 from common_custom.controllers.validators import MongoID
 from common_custom.controllers.pydantic.allowed_models import (
     AdminCreateAllowedConnectionRequestModel,
+    AdminUpdateAllowedConnectionRequestModel,
     AllowedConnectionModel,
     DeniedConnectionModel,
 )
@@ -74,6 +75,23 @@ async def create_allowed_connection(body: AdminCreateAllowedConnectionRequestMod
     return await mongodb_helper.create_allowed_connection_admin(
         ip_address=body.ip_address,
         service_name=body.service_name,
+        contact_methods=contact,
+        expiry_minutes=body.expiry_minutes if body.expire_at is None else None,
+        expire_at=body.expire_at,
+    )
+
+
+@router.patch(
+    "/edit/{id}",
+    summary="Update contact details and expiry on an allowed connection",
+    status_code=status.HTTP_200_OK,
+    response_model=AllowedConnectionModel,
+)
+async def update_allowed_connection(id: MongoID, body: AdminUpdateAllowedConnectionRequestModel):
+
+    contact = body.to_contact_methods()
+    return await mongodb_helper.update_allowed_connection(
+        connection_id=id,
         contact_methods=contact,
         expiry_minutes=body.expiry_minutes if body.expire_at is None else None,
         expire_at=body.expire_at,

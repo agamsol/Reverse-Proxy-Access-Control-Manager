@@ -353,6 +353,38 @@ Create an allowed connection **without** a prior pending request (admin grant). 
 
 ---
 
+### `PATCH /connection/edit/{id}`
+
+Update contact details and expiry on an existing allowed connection. **`ip_address` and `service_name` are not changed** (the admin UI treats them as read-only).
+
+**Path Parameters:**
+
+| Param | Type | Constraints |
+|---|---|---|
+| `id` | `MongoID` | 24-char hex string |
+
+**Request Body** `AdminUpdateAllowedConnectionRequestModel` (JSON):
+
+| Field | Type | Required | Constraints | Description |
+|---|---|---|---|---|
+| `contact_name` | `str` \| `null` | No | max 32 chars | Replaces stored name; blank or omitted becomes `null` |
+| `contact_email` | `EmailStr` \| `null` | No | — | Stored as a single-entry map `{ email: false }` when set; `null` clears email |
+| `contact_phone` | `str` \| `null` | No | max 64 chars | Stored as a single-entry map `{ phone: false }` when non-empty; `null` clears phone |
+| `expiry_minutes` | `int` \| `null` | No | 1–525600 when set | Minutes from **now** until `ExpireAt`; omit or `null` for **no expiry** (ignored if `expire_at` is set) |
+| `expire_at` | `datetime` \| `null` | No | Must be **in the future** when set | Absolute UTC expiry; when set, **overrides** `expiry_minutes` |
+
+When both `expiry_minutes` and `expire_at` are omitted or `null`, access **does not expire** (`ExpireAt` is set to `null`).
+
+**Response:** `AllowedConnectionModel` (HTTP **200 OK**)
+
+**Errors:**
+- `404 Not Found` — No allowed connection with the given `id`.
+- `422 Unprocessable Entity` — Validation errors (e.g. `expire_at` in the past, or invalid `expiry_minutes`).
+
+**Side effects:** None (no webhook). The proxy listener picks up the new `ExpireAt` on its next allow-list refresh; until then, `GET /check-access` on the public API also reflects the updated expiry on the next lookup.
+
+---
+
 ### `DELETE /connection/revoke/{id}`
 
 Revoke access for a specific allowed connection.
@@ -571,6 +603,7 @@ Same shape as the GET response. If `visible` is `false`, `required` is stored as
 | Yes | `DELETE` | `/pending/deny/{id}` | Deny a pending request |
 | Yes | `GET` | `/connection/get-connection-list` | List allowed connections |
 | Yes | `POST` | `/connection/create-allowed` | Admin grant without a pending request |
+| Yes | `PATCH` | `/connection/edit/{id}` | Update allowed connection contact and expiry |
 | Yes | `DELETE` | `/connection/revoke/{id}` | Revoke an allowed connection |
 | Yes | `GET` | `/connection/ignored/get-ignored-list` | List ignored IPs |
 | Yes | `POST` | `/connection/ignored/remove/{id}` | Unignore an IP address |
@@ -581,4 +614,4 @@ Same shape as the GET response. If `visible` is `false`, `required` is stored as
 | Yes | `GET` | `/config/get-contact-fields` | Get guest contact field settings |
 | Yes | `PUT` | `/config/update-contact-fields` | Update guest contact field settings |
 
-**Total: 21 endpoints** (2 public, 19 protected by Bearer token)
+**Total: 22 endpoints** (2 public, 20 protected by Bearer token)

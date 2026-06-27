@@ -105,6 +105,17 @@ export type CreateAllowedConnectionBody = {
   expire_at?: string | null
 }
 
+/** Body for `PATCH /connection/edit/{id}`. */
+export type UpdateAllowedConnectionBody = {
+  contact_name?: string | null
+  contact_email?: string | null
+  contact_phone?: string | null
+  /** Minutes from update time; ignored if `expire_at` is set. */
+  expiry_minutes?: number | null
+  /** ISO-8601 instant (UTC); when set, overrides `expiry_minutes`. */
+  expire_at?: string | null
+}
+
 /** Body for `POST /pending/accept/{id}` when the admin edits grant details in the UI. */
 export type AcceptPendingBody = {
   explicit: true
@@ -414,6 +425,16 @@ export function createAllowedConnection(
 ): Promise<AllowedConnection> {
   return apiFetch<AllowedConnection>('/connection/create-allowed', {
     method: 'POST',
+    json: body,
+  })
+}
+
+export function updateAllowedConnection(
+  id: string,
+  body: UpdateAllowedConnectionBody,
+): Promise<AllowedConnection> {
+  return apiFetch<AllowedConnection>(`/connection/edit/${encodeURIComponent(id)}`, {
+    method: 'PATCH',
     json: body,
   })
 }
