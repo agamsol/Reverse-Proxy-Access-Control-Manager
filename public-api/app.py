@@ -2,6 +2,7 @@ import os
 import time
 import uvicorn
 from pathlib import Path
+from urllib.parse import urlparse
 from dotenv import load_dotenv
 from pydantic import BaseModel, IPvAnyAddress, Field
 from common_custom.controllers.mongodb import MongoDb
@@ -11,9 +12,10 @@ from common_custom.utils.contact_fields import (
     ensure_contact_fields_file,
     load_contact_fields_config,
 )
+from common_custom.utils.service_matching import find_service_for_redirect
 from common_custom.utils.pydantic.contact_fields_models import ContactFieldsConfigResponseModel
 from fastapi import FastAPI, status, HTTPException, Request
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
 from common_custom.controllers.pydantic.service_models import ServiceItem
 from common_custom.utils.pydantic.health_models import StatusResponseModel
@@ -65,6 +67,36 @@ class RequestAccessResponseModel(BaseModel):
     ip_address: IPvAnyAddress
     services_requested: list[ServiceItem]
     message: str = Field(..., max_length=200)
+
+
+class CheckAccessResponseModel(BaseModel):
+    ip_address: IPvAnyAddress
+    redirect: str
+    service_name: str | None = Field(None, description="Matched catalog service name, if any")
+    has_access: bool
+    pending: bool = False
+    message: str = Field(..., max_length=300)
+
+
+def _parse_redirect_target(raw: str) -> str:
+    candidate = raw.strip()
+    if not candidate:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="redirect query parameter is required.",
+        )
+    parsed = urlparse(candidate)
+    if parsed.scheme not in ("http", "https"):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="redirect must use http or https.",
+        )
+    if not parsed.hostname:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="redirect URL is invalid.",
+        )
+    return candidate
 
 
 @app.middleware("http")
@@ -242,6 +274,61 @@ async def list_services():
 async def get_contact_fields_config():
     config = load_contact_fields_config(CONTACT_FIELDS_PATH)
     return contact_fields_to_response(config)
+
+
+@app.get(
+    "/check-access",
+    tags=['Regular'],
+    summary="Check whether the client IP has access to the service for a redirect URL",
+    response_model=CheckAccessResponseModel,
+)
+async def check_access(redirect: str, request: Request):
+    redirect_url = _parse_redirect_target(redirect)
+    remote_str = request.client.host
+
+    service = find_service_for_redirect(
+        await mongodb_helper.list_all_services(),
+        redirect_url,
+    )
+    if service is None:
+        body = CheckAccessResponseModel(
+            ip_address=remote_str,
+            redirect=redirect_url,
+            service_name=None,
+            has_access=False,
+            pending=False,
+            message="No matching service was found for this destination.",
+        )
+        return JSONResponse(
+            status_code=status.HTTP_404_NOT_FOUND,
+            content=body.model_dump(mode="json"),
+        )
+
+    service_name = service.get("name")
+    has_access = await mongodb_helper.has_active_allowed_for_service(remote_str, service_name)
+    pending = False
+    if not has_access:
+        pending = await mongodb_helper.has_active_pending_for_service(remote_str, service_name)
+
+    if has_access:
+        message = "Your network address has access to this service."
+        status_code = status.HTTP_200_OK
+    elif pending:
+        message = "A request from your network address is pending administrator approval."
+        status_code = status.HTTP_403_FORBIDDEN
+    else:
+        message = "Your network address does not have access to this service yet."
+        status_code = status.HTTP_403_FORBIDDEN
+
+    body = CheckAccessResponseModel(
+        ip_address=remote_str,
+        redirect=redirect_url,
+        service_name=service_name,
+        has_access=has_access,
+        pending=pending,
+        message=message,
+    )
+    return JSONResponse(status_code=status_code, content=body.model_dump(mode="json"))
 
 
 def _frontend_file_response(path_within: str) -> FileResponse:

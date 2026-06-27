@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 220 160">
+  <!-- White background -->
+  <rect fill="#fff" width="220" height="160"/>
+  <!-- Top blue stripe -->
+  <rect fill="#0038b8" y="15" width="220" height="25"/>
+  <!-- Bottom blue stripe -->
+  <rect fill="#0038b8" y="120" width="220" height="25"/>
+  <!-- Star of David (Magen David) - two overlapping triangles -->
+  <g transform="translate(110,80)" fill="none" stroke="#0038b8" stroke-width="6">
+    <!-- Upward pointing triangle -->
+    <polygon points="0,-35 30.3,17.5 -30.3,17.5"/>
+    <!-- Downward pointing triangle -->
+    <polygon points="0,35 30.3,-17.5 -30.3,-17.5"/>
+  </g>
+</svg>

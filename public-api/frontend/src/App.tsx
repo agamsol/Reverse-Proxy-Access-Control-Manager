@@ -21,12 +21,14 @@ import {
   HttpError,
   submitAccessRequest,
   type AccessCheckResponse,
+  type CheckAccessData,
   type ContactFieldsConfig,
   type RequestAccessConflict,
   type ServiceInfo,
   type StatusInfo,
 } from './api'
 import { strings, type Lang } from './i18n'
+import { LangPicker } from './LangPicker'
 import './App.css'
 
 /** Background (not <img>) so the asset cannot be dragged to a new tab. */
@@ -43,7 +45,7 @@ const IGNORE_BLOCK_MODAL_DELAY_MS = 200
 
 type GeoStatus = 'idle' | 'prompting' | 'ok' | 'denied'
 type ModalKind = null | 'how' | 'request' | 'success'
-type CheckStatus = 'idle' | 'checking' | 'granted' | 'blocked' | 'error'
+type CheckStatus = 'idle' | 'checking' | 'granted' | 'blocked' | 'pending' | 'not_found' | 'error'
 type FormSectionId = 'contact' | 'services' | 'details'
 
 type ResponseState =
@@ -219,14 +221,18 @@ function normalizeHost(value: unknown): string {
 function findMatchingService(services: ServiceInfo[], target: URL): ServiceInfo | null {
   const host = target.hostname.toLowerCase()
   for (const s of services) {
-    const candidates = [s.name, s.internal_address]
-    for (const c of candidates) {
-      const n = normalizeHost(c)
-      if (!n) continue
-      if (n === host) return s
-    }
+    const n = normalizeHost(s.name)
+    if (!n) continue
+    if (n === host) return s
   }
   return null
+}
+
+/** Public URL used in `?redirect=` for a catalog service. */
+function serviceToRedirectUrl(s: ServiceInfo): string {
+  const host = normalizeHost(s.name)
+  if (!host) return ''
+  return `${s.protocol}://${host}/`
 }
 
 const UNCATEGORIZED_KEY = '__uncategorized__'
@@ -423,11 +429,11 @@ export default function App() {
   const { lang, setLang } = useLang()
   const t = strings[lang]
 
-  const redirectTarget = useMemo(() => parseRedirectTarget(), [])
+  const [redirectTarget, setRedirectTarget] = useState<URL | null>(() => parseRedirectTarget())
   const redirectHasRaw = useMemo(() => {
     if (typeof window === 'undefined') return false
     return !!new URLSearchParams(window.location.search).get('redirect')
-  }, [])
+  }, [redirectTarget])
   const redirectInvalid = redirectHasRaw && !redirectTarget
 
   const [status, setStatus] = useState<StatusInfo | null>(null)
@@ -440,7 +446,6 @@ export default function App() {
   const [loadError, setLoadError] = useState<string | null>(null)
 
   const [modal, setModal] = useState<ModalKind>(null)
-  const lastSuccessRef = useRef<string>('')
 
   const [selected, setSelected] = useState<Set<string>>(() => new Set())
   const [accessUntilLocal, setAccessUntilLocal] = useState('')
@@ -483,7 +488,60 @@ export default function App() {
 
   const [checkStatus, setCheckStatus] = useState<CheckStatus>('idle')
   const [checkResponse, setCheckResponse] = useState<ResponseState>({ kind: 'idle' })
+  const [checkDetail, setCheckDetail] = useState<CheckAccessData | null>(null)
   const autoSelectedRef = useRef(false)
+
+  const applyRedirectHref = useCallback((href: string | null) => {
+    const params = new URLSearchParams(window.location.search)
+    let nextTarget: URL | null = null
+    if (href) {
+      try {
+        const url = new URL(href, window.location.origin)
+        if (url.protocol !== 'http:' && url.protocol !== 'https:') return
+        params.set('redirect', url.href)
+        nextTarget = url
+      } catch {
+        return
+      }
+    } else {
+      params.delete('redirect')
+    }
+    const qs = params.toString()
+    const path = `${window.location.pathname}${qs ? `?${qs}` : ''}${window.location.hash}`
+    window.history.replaceState(null, '', path)
+    setRedirectTarget(nextTarget)
+    setCheckStatus('idle')
+    setCheckResponse({ kind: 'idle' })
+    setCheckDetail(null)
+    autoSelectedRef.current = false
+  }, [])
+
+  const onServicePickerChange = useCallback(
+    (serviceId: string) => {
+      if (!serviceId || !services) return
+      const svc = services.find((s) => serviceIdentity(s) === serviceId)
+      if (!svc) return
+      const href = serviceToRedirectUrl(svc)
+      if (!href) return
+      applyRedirectHref(href)
+    },
+    [services, applyRedirectHref],
+  )
+
+  const matchedRedirectService = useMemo(() => {
+    if (!redirectTarget || !services) return null
+    return findMatchingService(services, redirectTarget)
+  }, [redirectTarget, services])
+
+  const redirectUnknownService =
+    !!redirectTarget && services !== null && !redirectInvalid && matchedRedirectService === null
+
+  const sortedServicesForPicker = useMemo(() => {
+    if (!services) return []
+    return [...services].sort((a, b) =>
+      serviceIdentity(a).localeCompare(serviceIdentity(b), undefined, { sensitivity: 'base' }),
+    )
+  }, [services])
 
   useEffect(() => {
     document.title = t.title
@@ -789,12 +847,11 @@ export default function App() {
 
     setSubmitting(true)
     try {
-      const res = await submitAccessRequest(payload)
+      await submitAccessRequest(payload)
       if (ignoredBlockOpenTimerRef.current != null) {
         clearTimeout(ignoredBlockOpenTimerRef.current)
         ignoredBlockOpenTimerRef.current = null
       }
-      lastSuccessRef.current = res.data.message
       resetForm()
       setIgnoredBlockServices(null)
       setAccessConflictDetail(null)
@@ -854,10 +911,12 @@ export default function App() {
   }, [geoStatus, geoErrorCode, t])
 
   const runAccessCheck = useCallback(async () => {
-    if (!redirectTarget) return
+    if (!redirectTarget || redirectUnknownService) return
     setCheckStatus('checking')
     setCheckResponse({ kind: 'pending' })
+    setCheckDetail(null)
     const response: AccessCheckResponse = await checkDestinationAccess(redirectTarget.href)
+    if (response.data) setCheckDetail(response.data)
     if (response.result === 'unknown') {
       setCheckResponse({ kind: 'network' })
     } else {
@@ -868,9 +927,11 @@ export default function App() {
       })
     }
     if (response.result === 'granted') setCheckStatus('granted')
+    else if (response.result === 'pending') setCheckStatus('pending')
+    else if (response.result === 'not_found') setCheckStatus('not_found')
     else if (response.result === 'blocked') setCheckStatus('blocked')
     else setCheckStatus('error')
-  }, [redirectTarget])
+  }, [redirectTarget, redirectUnknownService])
 
   const goToDestination = useCallback(() => {
     if (!redirectTarget) return
@@ -878,19 +939,29 @@ export default function App() {
   }, [redirectTarget])
 
   const checkStatusMessage = useMemo(() => {
+    if (redirectUnknownService) return t.serviceNotFound
+    if (checkDetail?.message && checkStatus !== 'not_found') return checkDetail.message
     switch (checkStatus) {
       case 'checking':
         return t.checkingAccess
       case 'granted':
         return t.accessGranted
+      case 'pending':
+        return t.accessPending
       case 'blocked':
         return t.accessNotYet
+      case 'not_found':
+        return checkDetail?.message ?? t.serviceNotFound
       case 'error':
         return t.accessCheckError
       default:
         return ''
     }
-  }, [checkStatus, t])
+  }, [checkStatus, checkDetail, redirectUnknownService, t])
+
+  const destinationStatus: CheckStatus = redirectUnknownService
+    ? 'not_found'
+    : checkStatus
 
   const ctaDisabled = !!loadError || services === null
 
@@ -908,31 +979,33 @@ export default function App() {
           </div>
 
           <div className="header-controls">
-            <div className="lang-switch" role="group" aria-label="Language">
-              <button
-                type="button"
-                className={`lang-btn ${lang === 'en' ? 'active' : ''}`}
-                onClick={() => setLang('en')}
-                aria-pressed={lang === 'en'}
-              >
-                EN
-              </button>
-              <button
-                type="button"
-                className={`lang-btn ${lang === 'he' ? 'active' : ''}`}
-                onClick={() => setLang('he')}
-                aria-pressed={lang === 'he'}
-              >
-                עב
-              </button>
-            </div>
+            <LangPicker
+              lang={lang}
+              onChange={setLang}
+              labels={{
+                language: t.language,
+                langEn: t.langEn,
+                langHe: t.langHe,
+              }}
+            />
             <button
               type="button"
               className="theme-toggle"
               onClick={toggle}
               aria-pressed={theme === 'dark'}
+              aria-label={theme === 'light' ? t.themeToDark : t.themeToLight}
+              title={theme === 'light' ? t.themeToDark : t.themeToLight}
             >
-              {theme === 'light' ? t.themeToDark : t.themeToLight}
+              {theme === 'light' ? (
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden>
+                  <path d="M21 12.79A9 9 0 1111.21 3a7 7 0 009.79 9.79z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                </svg>
+              ) : (
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden>
+                  <circle cx="12" cy="12" r="5" stroke="currentColor" strokeWidth="2"/>
+                  <path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+                </svg>
+              )}
             </button>
           </div>
         </header>
@@ -964,6 +1037,34 @@ export default function App() {
               </div>
             ) : null}
 
+            {services && services.length > 0 ? (
+              <div className="service-picker">
+                <label htmlFor="service-select" className="service-picker-label">
+                  {t.chooseService}
+                </label>
+                <select
+                  id="service-select"
+                  className="input service-picker-select"
+                  value={matchedRedirectService ? serviceIdentity(matchedRedirectService) : ''}
+                  onChange={(e) => onServicePickerChange(e.target.value)}
+                  disabled={!!loadError}
+                  aria-describedby={redirectUnknownService ? 'service-not-found-hint' : undefined}
+                >
+                  <option value="">{t.chooseServicePlaceholder}</option>
+                  {sortedServicesForPicker.map((s) => {
+                    const id = serviceIdentity(s)
+                    const label = s.name?.trim() ? s.name.trim() : id
+                    const desc = s.description?.trim()
+                    return (
+                      <option key={id} value={id}>
+                        {desc ? `${label} — ${desc}` : label}
+                      </option>
+                    )
+                  })}
+                </select>
+              </div>
+            ) : null}
+
             <div className="hero-actions">
               <button
                 type="button"
@@ -987,7 +1088,7 @@ export default function App() {
             </div>
 
             {redirectTarget ? (
-              <div className={`destination destination--${checkStatus}`}>
+              <div className={`destination destination--${destinationStatus}`}>
                 <div className="destination-row">
                   <span className="destination-label">{t.destinationLabel}</span>
                   <span className="destination-url" title={redirectTarget.href}>
@@ -995,37 +1096,55 @@ export default function App() {
                     {redirectTarget.pathname !== '/' ? redirectTarget.pathname : ''}
                   </span>
                 </div>
-                <div className="destination-actions">
-                  <ResponseBadge
-                    state={checkResponse}
-                    labelPending={t.responsePending}
-                    labelNetwork={t.responseNetwork}
-                    labelPrefix={t.responseCode}
-                  />
-                  {checkStatus === 'granted' ? (
-                    <button
-                      type="button"
-                      className="btn btn--primary btn--sm"
-                      onClick={goToDestination}
-                    >
-                      {t.continueTo} ↗
-                    </button>
-                  ) : (
-                    <button
-                      type="button"
-                      className="btn btn--quiet btn--sm"
-                      onClick={runAccessCheck}
-                      disabled={checkStatus === 'checking'}
-                    >
-                      {checkStatus === 'checking' ? t.checkingAccess : t.checkAccess}
-                    </button>
-                  )}
-                </div>
-                {checkStatusMessage && checkStatus !== 'idle' ? (
-                  <p className={`destination-feedback destination-feedback--${checkStatus}`}>
-                    {checkStatusMessage}
+                {redirectUnknownService ? (
+                  <p
+                    id="service-not-found-hint"
+                    className="destination-feedback destination-feedback--not_found"
+                    role="alert"
+                  >
+                    {t.serviceNotFound}
                   </p>
-                ) : null}
+                ) : (
+                  <>
+                    <div className="destination-actions">
+                      <ResponseBadge
+                        state={checkResponse}
+                        labelPending={t.responsePending}
+                        labelNetwork={t.responseNetwork}
+                        labelPrefix={t.responseCode}
+                      />
+                      {checkStatus === 'granted' ? (
+                        <button
+                          type="button"
+                          className="btn btn--primary btn--sm"
+                          onClick={goToDestination}
+                        >
+                          {t.continueTo} ↗
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          className="btn btn--quiet btn--sm"
+                          onClick={runAccessCheck}
+                          disabled={checkStatus === 'checking'}
+                        >
+                          {checkStatus === 'checking' ? t.checkingAccess : t.checkAccess}
+                        </button>
+                      )}
+                    </div>
+                    {checkStatusMessage && checkStatus !== 'idle' ? (
+                      <p className={`destination-feedback destination-feedback--${checkStatus}`}>
+                        {checkStatusMessage}
+                        {checkDetail?.service_name ? (
+                          <span className="destination-service-name">
+                            {' '}
+                            ({checkDetail.service_name})
+                          </span>
+                        ) : null}
+                      </p>
+                    ) : null}
+                  </>
+                )}
               </div>
             ) : null}
           </div>
@@ -1555,55 +1674,17 @@ export default function App() {
         title={t.successTitle}
         labelClose={t.close}
         footer={
-          redirectTarget ? (
-            <>
-              <button
-                type="button"
-                className="btn btn--quiet"
-                onClick={() => setModal(null)}
-              >
-                {t.done}
-              </button>
-              {checkStatus === 'granted' ? (
-                <button type="button" className="btn btn--primary" onClick={goToDestination}>
-                  {t.continueTo} ↗
-                </button>
-              ) : (
-                <button
-                  type="button"
-                  className="btn btn--primary"
-                  onClick={runAccessCheck}
-                  disabled={checkStatus === 'checking'}
-                >
-                  {checkStatus === 'checking' ? t.checkingAccess : t.checkAccess}
-                </button>
-              )}
-            </>
-          ) : (
-            <button type="button" className="btn btn--primary" onClick={() => setModal(null)}>
-              {t.done}
-            </button>
-          )
+          <button type="button" className="btn btn--primary" onClick={() => setModal(null)}>
+            {t.done}
+          </button>
         }
       >
         <div className="success-body">
           <div className="success-mark" aria-hidden>
             ✓
           </div>
-          <p>{lastSuccessRef.current}</p>
-          {redirectTarget ? (
-            <ResponseBadge
-              state={checkResponse}
-              labelPending={t.responsePending}
-              labelNetwork={t.responseNetwork}
-              labelPrefix={t.responseCode}
-            />
-          ) : null}
-          {redirectTarget && checkStatusMessage && checkStatus !== 'idle' ? (
-            <p className={`destination-feedback destination-feedback--${checkStatus}`}>
-              {checkStatusMessage}
-            </p>
-          ) : null}
+          <p className="success-lede">{t.successSubmitted}</p>
+          <p className="success-note">{t.successApprovalNote}</p>
         </div>
       </Modal>
     </div>

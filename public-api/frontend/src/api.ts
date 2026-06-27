@@ -123,76 +123,51 @@ export async function getContactFieldsConfig(): Promise<ContactFieldsConfig> {
   return res.json() as Promise<ContactFieldsConfig>
 }
 
-export type AccessCheckResult = 'granted' | 'blocked' | 'unknown'
+export type AccessCheckResult = 'granted' | 'blocked' | 'pending' | 'not_found' | 'unknown'
+
+export type CheckAccessData = {
+  ip_address: string
+  redirect: string
+  service_name: string | null
+  has_access: boolean
+  pending: boolean
+  message: string
+}
 
 export type AccessCheckResponse = {
   result: AccessCheckResult
   status: number
   statusText: string
   readable: boolean
+  data?: CheckAccessData
 }
 
-async function fetchWithTimeout(
-  url: string,
-  init: RequestInit,
-  timeoutMs: number,
-): Promise<Response> {
-  const controller = new AbortController()
-  const timer = setTimeout(() => controller.abort(), timeoutMs)
+export async function checkDestinationAccess(redirectUrl: string): Promise<AccessCheckResponse> {
+  const params = new URLSearchParams({ redirect: redirectUrl })
   try {
-    return await fetch(url, { ...init, signal: controller.signal })
-  } finally {
-    clearTimeout(timer)
-  }
-}
-
-export async function checkDestinationAccess(
-  url: string,
-  timeoutMs = 6000,
-): Promise<AccessCheckResponse> {
-  // Prefer a CORS request so we can read the true status code when the
-  // target service exposes CORS headers.
-  try {
-    const res = await fetchWithTimeout(
-      url,
-      {
-        method: 'GET',
-        mode: 'cors',
-        cache: 'no-store',
-        credentials: 'omit',
-        redirect: 'manual',
-      },
-      timeoutMs,
-    )
-    if (res.type === 'opaqueredirect') {
-      return { result: 'blocked', status: 302, statusText: 'Redirect', readable: false }
+    const res = await fetch(`/check-access?${params}`)
+    let data: CheckAccessData | undefined
+    const text = await res.text()
+    if (text) {
+      try {
+        data = JSON.parse(text) as CheckAccessData
+      } catch {
+        data = undefined
+      }
     }
-    return {
-      result: res.ok ? 'granted' : 'blocked',
-      status: res.status,
-      statusText: res.statusText,
-      readable: true,
+    if (!data) {
+      return { result: 'unknown', status: res.status, statusText: res.statusText, readable: false }
     }
-  } catch {
-    // CORS not allowed or similar; fall back to an opaque probe.
-  }
-
-  try {
-    const res = await fetchWithTimeout(
-      url,
-      {
-        method: 'GET',
-        mode: 'no-cors',
-        cache: 'no-store',
-        credentials: 'omit',
-        redirect: 'manual',
-      },
-      timeoutMs,
-    )
-    if (res.type === 'opaqueredirect') {
-      return { result: 'blocked', status: 302, statusText: 'Redirect', readable: false }
+    if (res.status === 404) {
+      return { result: 'not_found', status: res.status, statusText: res.statusText, readable: true, data }
     }
-    return { result: 'granted', status: 200, statusText: 'Reachable', readable: false }
+    if (data.has_access) {
+      return { result: 'granted', status: res.status, statusText: res.statusText, readable: true, data }
+    }
+    if (data.pending) {
+      return { result: 'pending', status: res.status, statusText: res.statusText, readable: true, data }
+    }
+    return { result: 'blocked', status: res.status, statusText: res.statusText, readable: true, data }
   } catch {
     return { result: 'unknown', status: 0, statusText: 'Network error', readable: false }
   }

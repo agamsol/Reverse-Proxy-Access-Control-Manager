@@ -7,6 +7,7 @@ const en = {
     'This service accepts only approved connections. Use this page to request access, and an administrator will review it for you.',
   langEn: 'English',
   langHe: 'Hebrew',
+  language: 'Language',
   themeToDark: 'Dark mode',
   themeToLight: 'Light mode',
   maintenanceBanner:
@@ -84,6 +85,9 @@ const en = {
   cancel: 'Cancel',
   done: 'Done',
   successTitle: 'Request submitted',
+  successSubmitted: 'Your access request has been submitted.',
+  successApprovalNote:
+    'An administrator will review it. Approval can take a few hours.',
   ctaRequest: 'Request access',
   heroLede:
     'You reached a protected service that is not publicly accessible. Submit a short access request and an administrator will review it for your network.',
@@ -91,11 +95,17 @@ const en = {
   detailsSection: 'Supplementary request details',
   reviewSend: 'Send request',
   destinationLabel: 'Destination',
+  chooseService: 'Choose a service',
+  chooseServicePlaceholder: 'Select a service…',
+  serviceNotFound:
+    'This destination is not a registered service. Pick one from the list above or contact an administrator.',
   checkAccess: 'Check access',
   checkingAccess: 'Checking…',
   accessGranted: 'Access has been granted. You can continue to the service.',
   accessNotYet:
     'Access is not available yet. Please wait for an administrator to approve your request.',
+  accessPending:
+    'A request from your network address is pending administrator approval.',
   accessCheckError: 'The check could not complete. Please try again in a moment.',
   continueTo: 'Continue to destination',
   invalidRedirect: 'The destination URL is not valid and will be ignored.',

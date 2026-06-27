@@ -95,11 +95,14 @@ Get all available services.
 
 | Field | Type | Required | Default | Constraints | Description |
 |---|---|---|---|---|---|
-| `name` | `str` | Yes | — | max 200 chars | Service name |
+| `name` | `str` | Yes | — | max 200 chars | **Public hostname** / nginx `server_name` (e.g. `cdn.example.com`). Also used as the proxy allow-list filename stem and as the guest portal redirect key: the public API matches `?redirect=` URLs to services by this field only (see `GET /check-access` on the public API). |
 | `description` | `str` \| `null` | No | `null` | max 200 chars | Service description |
-| `internal_address` | `IPvAnyAddress` | No | `127.0.0.1` | — | Internal address of the service |
-| `port` | `int` | No | `80` | — | Port number |
-| `protocol` | `"http"` \| `"https"` | No | `"http"` | — | Protocol |
+| `internal_address` | `IPvAnyAddress` | No | `127.0.0.1` | — | Upstream backend address the reverse proxy forwards to (not used for guest redirect matching) |
+| `port` | `int` | No | `80` | — | Upstream port |
+| `protocol` | `"http"` \| `"https"` | No | `"http"` | — | Upstream protocol |
+| `category` | `str` \| `null` | No | `null` | max 200 chars | Optional label for grouping services in the public access-request UI |
+
+**Guest portal integration:** When a user is redirected to the public API with `?redirect=https://<hostname>/…`, the hostname must equal a service `name` in this catalog for access checks and service picker pre-selection to work. `internal_address` may be shared across services (e.g. `127.0.0.1`) and must not duplicate another service’s public hostname.
 
 ---
 
@@ -111,11 +114,12 @@ Create a new service.
 
 | Field | Type | Required | Default | Constraints |
 |---|---|---|---|---|
-| `name` | `str` | Yes | — | max 200 chars |
+| `name` | `str` | Yes | — | max 200 chars; should be the public FQDN (`server_name`) |
 | `description` | `str` \| `null` | No | `null` | max 200 chars |
 | `internal_address` | `IPvAnyAddress` | No | `127.0.0.1` | — |
 | `port` | `int` | No | `80` | — |
 | `protocol` | `"http"` \| `"https"` | No | `"http"` | — |
+| `category` | `str` \| `null` | No | `null` | max 200 chars |
 
 **Response:** `ServiceResponseModel`
 

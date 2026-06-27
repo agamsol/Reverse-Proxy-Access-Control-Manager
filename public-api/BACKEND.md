@@ -48,12 +48,106 @@ Get a list of all services that exist in the database (for guests to choose what
 
 | Field              | Type                 | Required | Default     | Constraints   | Description                     |
 | ------------------ | -------------------- | -------- | ----------- | ------------- | ------------------------------- |
-| `name`             | `str`                | Yes      | —           | max 200 chars | Service name                    |
+| `name`             | `str`                | Yes      | —           | max 200 chars | Public hostname / nginx `server_name` (e.g. `cdn.example.com`). Used by the guest portal and `GET /check-access` to match `?redirect=` URLs. |
 | `description`      | `str` \| `null`       | No       | `null`      | max 200 chars | Service description             |
-| `internal_address` | `IPvAnyAddress`      | No       | `127.0.0.1` | —             | Internal address of the service |
+| `internal_address` | `IPvAnyAddress`      | No       | `127.0.0.1` | —             | Upstream backend address (not used for redirect matching) |
 | `port`             | `int`                | No       | `80`        | —             | Port number                     |
 | `protocol`         | `"http"` \| `"https"` | No       | `"http"`    | —             | Protocol                        |
+| `category`         | `str` \| `null`       | No       | `null`      | max 200 chars | Optional UI grouping label on the access-request form |
 
+
+---
+
+## Access check
+
+### `GET /check-access`
+
+Check whether the **client IP** (from the incoming request, honoring proxy headers) has active access to the service implied by a redirect URL. Used by the guest portal “Check access” flow when the user arrives with `?redirect=https://…`.
+
+**Auth:** None
+
+**Query parameters:**
+
+| Param      | Type  | Required | Description |
+| ---------- | ----- | -------- | ----------- |
+| `redirect` | `str` | Yes      | Absolute `http` or `https` URL of the protected resource (same value as the guest portal `?redirect=` query parameter). |
+
+**Service resolution:**
+
+- The redirect URL’s hostname is compared **only** to each catalog service’s `name` (case-insensitive, protocol/port/path stripped from the name if present).
+- `internal_address` is **not** used for matching (many services may share the same upstream IP).
+- If no catalog row matches, the response is HTTP `404` with `service_name: null`.
+
+**Response** `CheckAccessResponseModel`:
+
+| Field          | Type                | Constraints   | Description |
+| -------------- | ------------------- | ------------- | ----------- |
+| `ip_address`   | `IPvAnyAddress`     | —             | Client IP used for the lookup |
+| `redirect`     | `str`               | —             | Echo of the normalized redirect URL |
+| `service_name` | `str` \| `null`     | —             | Matched catalog `name`, or `null` when no service matches |
+| `has_access`   | `bool`              | —             | `true` when a non-expired row exists in `allowed_connections` for this IP + service |
+| `pending`      | `bool`              | default `false` | `true` when a pending request exists for this IP + service (only evaluated when `has_access` is `false`) |
+| `message`      | `str`               | max 300 chars | Human-readable result |
+
+**HTTP status on the response body** (body is always `CheckAccessResponseModel` JSON):
+
+| Status | Condition |
+| ------ | --------- |
+| `200 OK` | `has_access` is `true` |
+| `403 Forbidden` | Service matched but `has_access` is `false` (includes pending and not-yet-granted cases; see `pending`) |
+| `404 Not Found` | No catalog service matches the redirect hostname |
+
+**Errors:**
+
+- `400 Bad Request` — Missing/empty `redirect`, non-`http`/`https` scheme, or invalid URL (`detail` is a string message).
+
+**Example — access granted:**
+
+```http
+GET /check-access?redirect=https%3A%2F%2Fcdn.example.com%2F
+```
+
+```json
+{
+  "ip_address": "203.0.113.10",
+  "redirect": "https://cdn.example.com/",
+  "service_name": "cdn.example.com",
+  "has_access": true,
+  "pending": false,
+  "message": "Your network address has access to this service."
+}
+```
+
+**Example — pending approval:**
+
+```json
+{
+  "ip_address": "203.0.113.10",
+  "redirect": "https://cdn.example.com/",
+  "service_name": "cdn.example.com",
+  "has_access": false,
+  "pending": true,
+  "message": "A request from your network address is pending administrator approval."
+}
+```
+
+**Example — unknown destination:**
+
+```json
+{
+  "ip_address": "203.0.113.10",
+  "redirect": "https://unknown.example.com/",
+  "service_name": null,
+  "has_access": false,
+  "pending": false,
+  "message": "No matching service was found for this destination."
+}
+```
+
+**Notes:**
+
+- IP matching treats `127.0.0.1` and `::ffff:127.0.0.1` as the same client where applicable (same as `POST /request-access`).
+- Only the **matched** service is checked; a pending request for another service does not affect this result.
 
 ---
 
@@ -204,8 +298,9 @@ For each of `name`, `email`, and `phone_number`, the value is a `ContactFieldFla
 | ---- | ------ | ------------------------ | --------------------------------------------- |
 | No   | `GET`  | `/status`                | Service health status                         |
 | No   | `GET`  | `/services`              | List all services                             |
+| No   | `GET`  | `/check-access`          | Check client IP access for a redirect URL     |
 | No   | `POST` | `/request-access`        | Submit a guest access request                 |
 | No   | `GET`  | `/config/contact-fields` | Required/optional flags for contact fields    |
 
 
-**Total: 4 endpoints** (all public)
+**Total: 5 endpoints** (all public)
